@@ -1,0 +1,28 @@
+.page {
+  max-width: 420px;
+  margin: 64px auto;
+  padding: 0 20px;
+  text-align: left;
+}
+
+.page form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.page .error {
+  color: #c0392b;
+}
+
+.button,
+.page button {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #ccc);
+  cursor: pointer;
+  text-decoration: none;
+  width: fit-content;
+}

@@ -1,92 +1,50 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-
-export type Role = 'member' | 'librarian' | 'admin';
-
-export interface SessionUser {
-  name: string;
-  email: string;
-  role: Role;
-}
-
-interface SessionResponse {
-  needsRegistration: boolean;
-  email?: string;
-  user?: SessionUser;
-}
-
-interface AuthState {
-  loading: boolean;
-  /** Whether oauth2-proxy has an authenticated Google session for this browser. */
-  googleAuthed: boolean;
-  user: SessionUser | null;
-  needsRegistration: boolean;
-  pendingEmail: string | null;
-  refresh: () => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthState | undefined>(undefined);
+import * as api from './api';
+import type { RegisterInput, SessionUser } from './api';
+import { AuthContext } from './useAuth';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [googleAuthed, setGoogleAuthed] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [needsRegistration, setNeedsRegistration] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
-
-  async function refresh() {
-    setLoading(true);
-    try {
-      // oauth2-proxy's built-in forward-auth endpoint: 202/200 if signed in,
-      // 401 if not. It never redirects, so it's safe to call while logged out.
-      const authRes = await fetch('/oauth2/auth');
-      if (!authRes.ok) {
-        setGoogleAuthed(false);
-        setUser(null);
-        setNeedsRegistration(false);
-        setPendingEmail(null);
-        return;
-      }
-      setGoogleAuthed(true);
-
-      // Cookie is valid at this point, so oauth2-proxy will pass this straight
-      // through to the app instead of redirecting.
-      const res = await fetch('/api/auth/session');
-      const data: SessionResponse = await res.json();
-      if (data.needsRegistration) {
-        setUser(null);
-        setNeedsRegistration(true);
-        setPendingEmail(data.email ?? null);
-      } else {
-        setUser(data.user ?? null);
-        setNeedsRegistration(false);
-        setPendingEmail(null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
-    refresh();
+    let isCancelled = false;
+    api
+      .fetchMe()
+      .then((me) => {
+        if (!isCancelled) setUser(me);
+      })
+      .catch((err: unknown) => {
+        if (!isCancelled) setLoadError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!isCancelled) setLoading(false);
+      });
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
-  function logout() {
-    window.location.href = '/oauth2/sign_out';
+  async function login(email: string, password: string) {
+    await api.login(email, password);
+    setUser(await api.fetchMe());
+  }
+
+  async function register(input: RegisterInput) {
+    await api.register(input);
+    await login(input.email, input.password);
+  }
+
+  async function logout() {
+    await api.logout();
+    setUser(null);
   }
 
   return (
-    <AuthContext.Provider
-      value={{ loading, googleAuthed, user, needsRegistration, pendingEmail, refresh, logout }}
-    >
+    <AuthContext.Provider value={{ loading, loadError, user, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthState {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
-  return ctx;
 }

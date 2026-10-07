@@ -2,55 +2,71 @@
 
 See `docs/REQUIREMENTS.md` for the full product backlog and `docs/management/` for Sprint management docs (team roles, communication plan, risk register, meeting minutes).
 
-Stack: Node.js + Express + TypeScript backend, React + TypeScript (Vite) frontend, SQLite for storage. Login/logout is handled by [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) in front of the app, authenticating against Google — the app never sees or stores a password.
+Stack: FastAPI (Python 3.12, managed with [uv](https://docs.astral.sh/uv/)) backend, React + TypeScript (Vite) frontend, SQLite for storage. Accounts and sessions are handled by [fastapi-users](https://fastapi-users.github.io/fastapi-users/). Design decisions are recorded in `docs/auth/decisions.md`.
 
 ## How auth works
 
-1. `oauth2-proxy` sits in front of the Express app and requires a Google sign-in before any request reaches it.
-2. Once signed in, oauth2-proxy forwards `X-Forwarded-Email` / `X-Forwarded-User` headers to the app on every request.
-3. The app checks `GET /api/auth/session`: if no local profile exists yet for that email, the frontend shows a one-field registration form (name) — submitting it calls `POST /api/auth/register`, which creates a `member` profile.
-4. Logging out just navigates to `/oauth2/sign_out`, which oauth2-proxy handles.
+- Email + password login. Passwords are hashed with argon2 (via fastapi-users).
+- On login the server sets an `HttpOnly`, `SameSite=Lax` cookie (`lms_session`) holding an opaque token stored server-side; logging out deletes the token, so the cookie stops working immediately.
+- Every account has one role: `member`, `librarian` or `admin`.
+- Visitors can self-register, and always get `member`. Librarian and admin accounts are created with the `lms create-user` command (below).
 
-## Local development (without Docker)
+| Method | Path                  | Body                                    | Result                        |
+|--------|-----------------------|-----------------------------------------|-------------------------------|
+| POST   | `/api/auth/register`  | JSON `{email, password, name}`          | 201 with the new user         |
+| POST   | `/api/auth/login`     | form `username=<email>&password=...`    | 204 and sets the cookie       |
+| POST   | `/api/auth/logout`    | —                                       | 204 and revokes the session   |
+| GET    | `/api/auth/me`        | —                                       | the signed-in user, or 401    |
+
+Protecting an endpoint by role:
+
+```python
+staff = auth.require_role(Role.LIBRARIAN, Role.ADMIN)
+
+@router.post("/api/books")
+async def add_book(user: User = Depends(staff)) -> ...: ...
+```
+
+Signed-out callers get 401; signed-in callers without a listed role get 403.
+
+## Local development
 
 Two terminals:
 
 ```bash
 cd server
-npm install
-npm run dev        # http://localhost:4000
+uv sync
+LMS_COOKIE_SECURE=false uv run uvicorn --factory lms.app:app_from_env --reload   # http://localhost:8000
 ```
 
 ```bash
 cd client
 npm install
-npm run dev         # http://localhost:5173, proxies /api to :4000 if configured, or hit :4000 directly
+npm run dev         # http://localhost:5173, proxies /api to :8000
 ```
 
-Without oauth2-proxy running, `/api/auth/session` will always 401 (no `X-Forwarded-Email` header) — for local UI work without Google, you can pass the header manually with a tool like `curl -H "X-Forwarded-Email: you@example.com"` or a browser extension.
-
-Run the server test suite:
+Create the first admin (prompts for the password):
 
 ```bash
 cd server
-npm test
+uv run lms create-user --email admin@example.com --name Admin --role admin
 ```
 
-## Full stack with oauth2-proxy + Google (Docker Compose)
+Configuration is via `LMS_*` environment variables; see `.env.example`.
 
-1. Create a Google OAuth client:
-   - Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
-   - Create an **OAuth client ID** of type **Web application**.
-   - Add authorized redirect URI: `http://localhost:4180/oauth2/callback`.
-   - Copy the generated Client ID and Client Secret.
-2. Copy `.env.example` to `.env` and fill in:
-   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` from step 1.
-   - `OAUTH2_PROXY_COOKIE_SECRET` — a random 32-byte secret, e.g. `openssl rand -base64 32 | head -c 32 | base64`.
-3. Start everything:
+Server tests and lint:
 
-   ```bash
-   docker compose up --build
-   ```
+```bash
+cd server
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+```
 
-4. Visit `http://localhost:4180` — you'll be redirected to Google sign-in, then back to the app. First-time sign-ins are prompted to complete registration (name only).
-5. To log out, visit `http://localhost:4180/oauth2/sign_out`.
+## Full stack (Docker Compose)
+
+```bash
+docker compose up --build    # http://localhost:8000
+docker compose exec app /app/server/.venv/bin/lms create-user --email admin@example.com --name Admin --role admin
+```
+
+The database lives in the `lms-data` volume. Compose sets `LMS_COOKIE_SECURE=false` because it serves plain HTTP; set it to `true` behind HTTPS.

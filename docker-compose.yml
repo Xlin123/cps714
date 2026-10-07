@@ -8,6 +8,8 @@ services:
     environment:
       # Served over plain HTTP on localhost; set to true behind HTTPS.
       LMS_COOKIE_SECURE: ${LMS_COOKIE_SECURE:-false}
+      # Seeds member/librarian/admin test logins with public passwords. Local only.
+      LMS_DEMO_ACCOUNTS: ${LMS_DEMO_ACCOUNTS:-true}
     volumes:
       - lms-data:/app/data
     restart: unless-stopped

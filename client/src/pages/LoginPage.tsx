@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { DemoAccountButtons } from './DemoAccountButtons';
 import { useSubmit } from './useSubmit';
 
 export function LoginPage() {
@@ -12,6 +13,12 @@ export function LoginPage() {
   return (
     <div className="page">
       <h1>Log in</h1>
+      <DemoAccountButtons
+        onPick={(account) => {
+          setEmail(account.email);
+          setPassword(account.password);
+        }}
+      />
       <form onSubmit={onSubmit}>
         <label htmlFor="email">Email</label>
         <input

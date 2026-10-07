@@ -35,3 +35,26 @@ sign-in. The backend moves from Express to FastAPI.
   secret is configured. Mounting either requires adding one.
 - Tables are created with `create_all` at startup. Schema changes will need a
   migration tool (e.g. Alembic) once there is data worth keeping.
+
+## 2026-10-07: Demo accounts behind a server flag
+
+**Context.** The team wants login-page buttons that fill in a member, librarian
+or admin test account.
+
+**Options.**
+
+| Option | Notes |
+|---|---|
+| Server flag | `LMS_DEMO_ACCOUNTS=true` seeds the accounts at startup and serves their logins at `/api/dev/demo-accounts`; the page shows buttons only if that endpoint answers. One switch, credentials defined once. |
+| Build flag + CLI seed | `VITE_DEMO_ACCOUNTS` bakes credentials into the JS bundle; accounts are seeded by hand. Credentials defined in both TS and Python. |
+
+**Decision.** Server flag.
+
+**Consequences.**
+
+- Off by default. When off, the endpoint is not mounted (404) and no accounts
+  are created. Docker Compose turns it on because it is the local dev stack.
+- Turning the flag off later does not delete accounts already seeded; their
+  public passwords keep working until the accounts are removed.
+- Seeding is idempotent and fails startup if a demo email belongs to an account
+  with a different role.

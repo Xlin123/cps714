@@ -6,9 +6,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from lms.accounts import AccountCreate, create_account
 from lms.app import create_app
 from lms.auth import Auth
-from lms.cli import AccountCreate, create_account
 from lms.database import Database
 from lms.roles import Role
 from lms.settings import Settings
@@ -28,7 +28,7 @@ def settings(tmp_path: Path) -> Settings:
 def auth_and_app(settings: Settings) -> tuple[Auth, FastAPI]:
     database = Database(settings.db_url)
     auth = Auth(database, settings)
-    return auth, create_app(database, auth, client_dist_dir=None)
+    return auth, create_app(database, auth, client_dist_dir=None, are_demo_accounts_enabled=False)
 
 
 @pytest.fixture

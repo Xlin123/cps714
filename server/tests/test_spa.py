@@ -15,7 +15,12 @@ def test_client_routes_fall_back_to_index_but_api_paths_do_not(
     dist.mkdir()
     (dist / "index.html").write_text("<div id=root></div>")
     database = Database(settings.db_url)
-    app = create_app(database, Auth(database, settings), client_dist_dir=dist)
+    app = create_app(
+        database,
+        Auth(database, settings),
+        client_dist_dir=dist,
+        are_demo_accounts_enabled=False,
+    )
 
     with TestClient(app) as client:
         assert client.get("/login").text == "<div id=root></div>"

@@ -1,5 +1,6 @@
 """HTTP application assembly."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,9 +13,12 @@ from starlette.types import Scope
 
 from lms.auth import Auth
 from lms.database import Database
+from lms.demo import demo_router, seed_demo_accounts
 from lms.models import User
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class SpaStaticFiles(StaticFiles):
@@ -45,23 +49,39 @@ def _auth_router(auth: Auth) -> APIRouter:
     return router
 
 
-def create_app(database: Database, auth: Auth, client_dist_dir: Path | None) -> FastAPI:
+def create_app(
+    database: Database,
+    auth: Auth,
+    *,
+    client_dist_dir: Path | None,
+    are_demo_accounts_enabled: bool,
+) -> FastAPI:
     """Build the app. The app takes ownership of ``database`` and disposes it on shutdown.
 
     Example::
 
         database = Database(settings.db_url)
-        app = create_app(database, Auth(database, settings), settings.client_dist_dir)
+        app = create_app(
+            database,
+            Auth(database, settings),
+            client_dist_dir=settings.client_dist_dir,
+            are_demo_accounts_enabled=settings.are_demo_accounts_enabled,
+        )
     """
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await database.create_tables()
+        if are_demo_accounts_enabled:
+            logger.warning("Demo accounts enabled with public passwords; never use in production.")
+            await seed_demo_accounts(database)
         yield
         await database.dispose()
 
     app = FastAPI(title="LMS", lifespan=lifespan)
     app.include_router(_auth_router(auth))
+    if are_demo_accounts_enabled:
+        app.include_router(demo_router())
 
     @app.get("/api/health")
     async def health() -> dict[str, bool]:
@@ -76,4 +96,9 @@ def app_from_env() -> FastAPI:
     """Uvicorn factory: ``uvicorn --factory lms.app:app_from_env``."""
     settings = Settings.from_env()
     database = Database(settings.db_url)
-    return create_app(database, Auth(database, settings), settings.client_dist_dir)
+    return create_app(
+        database,
+        Auth(database, settings),
+        client_dist_dir=settings.client_dist_dir,
+        are_demo_accounts_enabled=settings.are_demo_accounts_enabled,
+    )

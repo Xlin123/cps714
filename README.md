@@ -45,6 +45,8 @@ npm install
 npm run dev         # http://localhost:5173, proxies /api to :8000
 ```
 
+For test accounts, add `LMS_DEMO_ACCOUNTS=true` to the server command. That creates `member@example.com`, `librarian@example.com` and `admin@example.com` (password `library-demo`), and the login page shows a button per role that fills in the form. The passwords are public, so never enable it outside your own machine.
+
 Create the first admin (prompts for the password):
 
 ```bash
@@ -68,5 +70,7 @@ uv run ruff check . && uv run ruff format --check .
 docker compose up --build    # http://localhost:8000
 docker compose exec app /app/server/.venv/bin/lms create-user --email admin@example.com --name Admin --role admin
 ```
+
+Compose enables the demo accounts (`LMS_DEMO_ACCOUNTS=true`); set it to `false` in `.env` to turn them off. Pass `--build` after code changes, otherwise Compose reuses the old image.
 
 The database lives in the `lms-data` volume. Compose sets `LMS_COOKIE_SECURE=false` because it serves plain HTTP; set it to `true` behind HTTPS.

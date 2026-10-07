@@ -26,3 +26,18 @@
   text-decoration: none;
   width: fit-content;
 }
+
+.demo-accounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.demo-accounts p {
+  margin: 0;
+}
+
+.demo-accounts button {
+  text-transform: capitalize;
+}

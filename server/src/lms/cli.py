@@ -6,40 +6,12 @@ import getpass
 import sys
 
 from fastapi_users import InvalidPasswordException
-from fastapi_users import schemas as user_schemas
 from fastapi_users.exceptions import UserAlreadyExists
-from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
-from pydantic import ConfigDict, Field
 
-from lms.auth import UserManager
+from lms.accounts import AccountCreate, create_account
 from lms.database import Database
-from lms.models import NAME_MAX_LENGTH, User
 from lms.roles import Role
 from lms.settings import Settings
-
-
-class AccountCreate(user_schemas.BaseUserCreate):
-    """Operator-only account body; unlike self-registration it carries a role."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1, max_length=NAME_MAX_LENGTH)
-    role: Role
-
-
-async def create_account(database: Database, account: AccountCreate) -> User:
-    """Create an account with any role, applying the normal password rules.
-
-    Example::
-
-        await create_account(database, AccountCreate(
-            email="admin@example.com", password="...", name="Admin", role=Role.ADMIN,
-        ))
-    """
-    await database.create_tables()
-    async with database.session_maker() as session:
-        manager = UserManager(SQLAlchemyUserDatabase(session, User))
-        return await manager.create(account, safe=False)
 
 
 def main(argv: list[str] | None = None) -> int:

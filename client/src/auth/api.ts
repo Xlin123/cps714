@@ -62,3 +62,17 @@ export async function logout(): Promise<void> {
   // 401 means the session had already expired, which is the state we want.
   if (!res.ok && res.status !== 401) throw new Error(`Logout failed with ${res.status}`);
 }
+
+export interface DemoAccount {
+  role: Role;
+  email: string;
+  password: string;
+}
+
+/** Demo logins, or an empty list when the server has them switched off. */
+export async function fetchDemoAccounts(): Promise<DemoAccount[]> {
+  const res = await fetch('/api/dev/demo-accounts');
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`GET /api/dev/demo-accounts failed with ${res.status}`);
+  return res.json();
+}

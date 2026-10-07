@@ -3,9 +3,10 @@
 import uuid
 
 from fastapi_users import schemas
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, computed_field
 
 from lms.models import NAME_MAX_LENGTH
+from lms.permissions import Capability, capabilities_for
 from lms.roles import Role
 
 
@@ -14,6 +15,12 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
 
     name: str
     role: Role
+
+    @computed_field
+    @property
+    def capabilities(self) -> list[Capability]:
+        """What this account may do, so the client never keeps its own role table."""
+        return sorted(capabilities_for(self.role))
 
 
 class UserCreate(schemas.BaseUserCreate):

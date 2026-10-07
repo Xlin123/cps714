@@ -11,9 +11,11 @@ from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
+from lms.areas import areas_router
 from lms.auth import Auth
+from lms.catalog import catalog_router
 from lms.database import Database
-from lms.demo import demo_router, seed_demo_accounts
+from lms.demo import demo_router, seed_demo_accounts, seed_demo_books
 from lms.models import User
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
@@ -54,7 +56,7 @@ def create_app(
     auth: Auth,
     *,
     client_dist_dir: Path | None,
-    are_demo_accounts_enabled: bool,
+    is_demo_data_enabled: bool,
 ) -> FastAPI:
     """Build the app. The app takes ownership of ``database`` and disposes it on shutdown.
 
@@ -65,22 +67,25 @@ def create_app(
             database,
             Auth(database, settings),
             client_dist_dir=settings.client_dist_dir,
-            are_demo_accounts_enabled=settings.are_demo_accounts_enabled,
+            is_demo_data_enabled=settings.is_demo_data_enabled,
         )
     """
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await database.create_tables()
-        if are_demo_accounts_enabled:
-            logger.warning("Demo accounts enabled with public passwords; never use in production.")
+        if is_demo_data_enabled:
+            logger.warning("Demo data enabled with public passwords; never use in production.")
             await seed_demo_accounts(database)
+            await seed_demo_books(database)
         yield
         await database.dispose()
 
     app = FastAPI(title="LMS", lifespan=lifespan)
     app.include_router(_auth_router(auth))
-    if are_demo_accounts_enabled:
+    app.include_router(catalog_router(database))
+    app.include_router(areas_router(auth))
+    if is_demo_data_enabled:
         app.include_router(demo_router())
 
     @app.get("/api/health")
@@ -100,5 +105,5 @@ def app_from_env() -> FastAPI:
         database,
         Auth(database, settings),
         client_dist_dir=settings.client_dist_dir,
-        are_demo_accounts_enabled=settings.are_demo_accounts_enabled,
+        is_demo_data_enabled=settings.is_demo_data_enabled,
     )

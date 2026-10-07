@@ -2,12 +2,16 @@
 
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyBaseAccessTokenTableUUID
-from sqlalchemy import Enum, String
+from sqlalchemy import CheckConstraint, Enum, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from lms.roles import Role
 
 NAME_MAX_LENGTH = 100
+TITLE_MAX_LENGTH = 300
+AUTHOR_MAX_LENGTH = 200
+ISBN_MAX_LENGTH = 17
+CATEGORY_MAX_LENGTH = 50
 
 
 class Base(DeclarativeBase):
@@ -31,3 +35,17 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 
 class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
     """A server-side login session; deleting the row logs the session out."""
+
+
+class Book(Base):
+    """A catalog entry. ``total_copies`` counts every copy the library owns."""
+
+    __tablename__ = "book"
+    __table_args__ = (CheckConstraint("total_copies >= 0", name="total_copies_not_negative"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(TITLE_MAX_LENGTH), nullable=False)
+    author: Mapped[str] = mapped_column(String(AUTHOR_MAX_LENGTH), nullable=False)
+    isbn: Mapped[str] = mapped_column(String(ISBN_MAX_LENGTH), nullable=False, unique=True)
+    category: Mapped[str] = mapped_column(String(CATEGORY_MAX_LENGTH), nullable=False)
+    total_copies: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -45,7 +45,7 @@ or admin test account.
 
 | Option | Notes |
 |---|---|
-| Server flag | `LMS_DEMO_ACCOUNTS=true` seeds the accounts at startup and serves their logins at `/api/dev/demo-accounts`; the page shows buttons only if that endpoint answers. One switch, credentials defined once. |
+| Server flag | `LMS_DEMO_DATA=true` seeds the accounts at startup and serves their logins at `/api/dev/demo-accounts`; the page shows buttons only if that endpoint answers. One switch, credentials defined once. |
 | Build flag + CLI seed | `VITE_DEMO_ACCOUNTS` bakes credentials into the JS bundle; accounts are seeded by hand. Credentials defined in both TS and Python. |
 
 **Decision.** Server flag.
@@ -58,3 +58,27 @@ or admin test account.
   public passwords keep working until the accounts are removed.
 - Seeding is idempotent and fails startup if a demo email belongs to an account
   with a different role.
+
+Renamed to `LMS_DEMO_DATA` on 2026-10-07 when it started seeding sample books
+too (see `docs/catalog/decisions.md`).
+
+## 2026-10-07: Role-based access through a server-side capability map (LMS-3)
+
+**Context.** LMS-3 needs protected pages and actions blocked for roles that
+aren't allowed, verified for each role. No staff or admin feature exists yet.
+
+**Decision.**
+
+- `server/src/lms/permissions.py` maps each role to a set of capabilities,
+  mirroring `docs/REQUIREMENTS.md` §3. Endpoints are guarded with
+  `Auth.require_capability`, which builds on `require_role`.
+- `/api/auth/me` returns the user's capabilities. The client gates links and
+  pages on that list and keeps no role table, so the rules exist once.
+- LMS-3 is shown with empty placeholder pages, `/staff` (librarian, admin) and
+  `/admin` (admin), chosen over example pages listing accounts. Each page reads
+  its text from a guarded endpoint, so a wrong role is refused by the server
+  (403), not just by a hidden link.
+
+**Consequences.** Later stories add a capability, grant it in the map, and
+guard their endpoints with it. The client's guard is a convenience; the
+server's is the enforcement.

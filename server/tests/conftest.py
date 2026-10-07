@@ -10,6 +10,7 @@ from lms.accounts import AccountCreate, create_account
 from lms.app import create_app
 from lms.auth import Auth
 from lms.database import Database
+from lms.models import Book
 from lms.roles import Role
 from lms.settings import Settings
 
@@ -28,7 +29,7 @@ def settings(tmp_path: Path) -> Settings:
 def auth_and_app(settings: Settings) -> tuple[Auth, FastAPI]:
     database = Database(settings.db_url)
     auth = Auth(database, settings)
-    return auth, create_app(database, auth, client_dist_dir=None, are_demo_accounts_enabled=False)
+    return auth, create_app(database, auth, client_dist_dir=None, is_demo_data_enabled=False)
 
 
 @pytest.fixture
@@ -55,3 +56,27 @@ def seed_account(settings: Settings, email: str, role: Role) -> None:
 def login(client: TestClient, email: str, password: str = PASSWORD) -> int:
     response = client.post("/api/auth/login", data={"username": email, "password": password})
     return response.status_code
+
+
+def add_books(settings: Settings, books: list[Book]) -> None:
+    async def run() -> None:
+        database = Database(settings.db_url)
+        try:
+            await database.create_tables()
+            async with database.session_maker() as session:
+                session.add_all(books)
+                await session.commit()
+        finally:
+            await database.dispose()
+
+    asyncio.run(run())
+
+
+def book(title: str, *, copies: int = 1, isbn: str | None = None) -> Book:
+    return Book(
+        title=title,
+        author="Author",
+        isbn=isbn or f"isbn-{title}",
+        category="Fiction",
+        total_copies=copies,
+    )

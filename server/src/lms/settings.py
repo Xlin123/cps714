@@ -29,7 +29,7 @@ class Settings:
     # Built React app to serve at "/"; None when Vite serves the client instead.
     client_dist_dir: Path | None = None
     # Seeds fixed, publicly known logins. Development only.
-    are_demo_accounts_enabled: bool = False
+    is_demo_data_enabled: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -48,7 +48,7 @@ class Settings:
                 source, "LMS_SESSION_LIFETIME_SECONDS", DEFAULT_SESSION_LIFETIME_SECONDS
             ),
             client_dist_dir=Path(client_dist) if client_dist else None,
-            are_demo_accounts_enabled=_parse_bool(source, "LMS_DEMO_ACCOUNTS", default=False),
+            is_demo_data_enabled=_parse_bool(source, "LMS_DEMO_DATA", default=False),
         )
 
 

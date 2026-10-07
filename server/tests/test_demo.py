@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from lms.app import create_app
 from lms.auth import Auth
 from lms.database import Database
-from lms.demo import DEMO_ACCOUNTS, DemoSeedError, seed_demo_accounts
+from lms.demo import DEMO_ACCOUNTS, DEMO_BOOKS, DemoSeedError, seed_demo_accounts
 from lms.roles import Role
 from lms.settings import Settings
 from tests.conftest import login, seed_account
@@ -18,13 +18,13 @@ def demo_client(settings: Settings, *, is_enabled: bool) -> TestClient:
         database,
         Auth(database, settings),
         client_dist_dir=None,
-        are_demo_accounts_enabled=is_enabled,
+        is_demo_data_enabled=is_enabled,
     )
     return TestClient(app)
 
 
 def test_demo_accounts_are_off_by_default() -> None:
-    assert Settings.from_env({}).are_demo_accounts_enabled is False
+    assert Settings.from_env({}).is_demo_data_enabled is False
 
 
 def test_disabled_demo_has_no_endpoint_and_no_accounts(settings: Settings) -> None:
@@ -69,3 +69,17 @@ def test_seeding_fails_loudly_if_a_demo_email_has_another_role(settings: Setting
 
     with pytest.raises(DemoSeedError):
         asyncio.run(run())
+
+
+def test_enabled_demo_seeds_books_once(settings: Settings) -> None:
+    with demo_client(settings, is_enabled=True):
+        pass
+    with demo_client(settings, is_enabled=True) as client:
+        total = client.get("/api/books").json()["total"]
+
+    assert total == len(DEMO_BOOKS)
+
+
+def test_disabled_demo_has_no_books(settings: Settings) -> None:
+    with demo_client(settings, is_enabled=False) as client:
+        assert client.get("/api/books").json()["total"] == 0

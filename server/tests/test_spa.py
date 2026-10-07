@@ -19,7 +19,7 @@ def test_client_routes_fall_back_to_index_but_api_paths_do_not(
         database,
         Auth(database, settings),
         client_dist_dir=dist,
-        are_demo_accounts_enabled=False,
+        is_demo_data_enabled=False,
     )
 
     with TestClient(app) as client:

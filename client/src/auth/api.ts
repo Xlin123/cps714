@@ -1,10 +1,14 @@
 export type Role = 'member' | 'librarian' | 'admin';
 
+/** Mirrors the server's Capability enum; the server decides who holds which. */
+export type Capability = 'view_staff_area' | 'view_admin_area';
+
 export interface SessionUser {
   id: string;
   name: string;
   email: string;
   role: Role;
+  capabilities: Capability[];
 }
 
 export interface RegisterInput {

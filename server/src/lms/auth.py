@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.database import Database
 from lms.models import AccessToken, User
+from lms.permissions import Capability, roles_with
 from lms.roles import Role
 from lms.schemas import UserCreate
 from lms.settings import Settings
@@ -114,3 +115,16 @@ class Auth:
             return user
 
         return dependency
+
+    def require_capability(
+        self, capability: Capability
+    ) -> Callable[..., Coroutine[Any, Any, User]]:
+        """Dependency yielding the signed-in user if their role grants ``capability``.
+
+        Responds 401 when signed out and 403 when the role lacks it.
+
+        Example::
+
+            staff = auth.require_capability(Capability.VIEW_STAFF_AREA)
+        """
+        return self.require_role(*roles_with(capability))

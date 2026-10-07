@@ -39,28 +39,32 @@ export function CatalogPage() {
         <p>No books in the catalogue yet.</p>
       ) : (
         <>
-          <table className="catalog">
-            <thead>
-              <tr>
-                <th scope="col">Title</th>
-                <th scope="col">Author</th>
-                <th scope="col">Category</th>
-                <th scope="col">Availability</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((book) => (
-                <tr key={book.id}>
-                  <td>{book.title}</td>
-                  <td>{book.author}</td>
-                  <td>{book.category}</td>
-                  <td className={book.is_available ? undefined : 'unavailable'}>
-                    {availability(book)}
-                  </td>
+          <div className="table-scroll">
+            <table className="catalog">
+              <thead>
+                <tr>
+                  <th scope="col">Title</th>
+                  <th scope="col">Author</th>
+                  <th scope="col" className="category">
+                    Category
+                  </th>
+                  <th scope="col">Availability</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {page.items.map((book) => (
+                  <tr key={book.id}>
+                    <td>{book.title}</td>
+                    <td>{book.author}</td>
+                    <td className="category">{book.category}</td>
+                    <td className={book.is_available ? undefined : 'unavailable'}>
+                      {availability(book)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {(hasPrevious || hasNext) && (
             <div className="pager">
               <button disabled={!hasPrevious} onClick={() => setOffset(offset - PAGE_SIZE)}>

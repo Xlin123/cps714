@@ -1,15 +1,51 @@
+/* #root is a flex column, so without an explicit width a page shrinks to its
+   content and forms end up different widths on different pages. */
 .page {
+  width: 100%;
   max-width: 420px;
-  margin: 64px auto;
+  margin: 48px auto;
   padding: 0 20px;
+  box-sizing: border-box;
   text-align: left;
+}
+
+.page > * + * {
+  margin-top: 16px;
+}
+
+.page h1 {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
 }
 
 .page form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 6px;
+}
+
+.page label:not(:first-child) {
+  margin-top: 8px;
+}
+
+.page input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.page input:focus {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.page form button[type='submit'] {
+  margin-top: 12px;
 }
 
 .page .error {
@@ -25,6 +61,14 @@
   cursor: pointer;
   text-decoration: none;
   width: fit-content;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.page button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .demo-accounts {
@@ -35,6 +79,7 @@
 }
 
 .demo-accounts p {
+  flex-basis: 100%;
   margin: 0;
 }
 
@@ -77,11 +122,34 @@
   border-radius: 6px;
   border: 1px solid var(--border);
   cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+}
+
+.navbar-account span {
+  overflow-wrap: anywhere;
+}
+
+/* Lets a wide table scroll inside the page instead of spilling past it. */
+.table-scroll {
+  overflow-x: auto;
 }
 
 .catalog {
   width: 100%;
   border-collapse: collapse;
+}
+
+@media (max-width: 600px) {
+  .catalog .category {
+    display: none;
+  }
+
+  .catalog th,
+  .catalog td {
+    padding: 8px 6px;
+    font-size: 15px;
+  }
 }
 
 .catalog th,

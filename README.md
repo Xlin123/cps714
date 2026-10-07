@@ -82,3 +82,10 @@ docker compose exec app /app/server/.venv/bin/lms create-user --email admin@exam
 Compose enables the demo data (`LMS_DEMO_DATA=true`); set it to `false` in `.env` to turn them off. Pass `--build` after code changes, otherwise Compose reuses the old image.
 
 The database lives in the `lms-data` volume. Compose sets `LMS_COOKIE_SECURE=false` because it serves plain HTTP; set it to `true` behind HTTPS.
+
+## Documents
+
+Gantt Chart : https://docs.google.com/document/d/1FqA0hwHrnps754bklaw-2B9ZYNS_FJOhthRWKsUfDlQ/edit?tab=t.0
+Meeting Minutes : https://docs.google.com/document/d/1Sf_fg_BmK7BCHXbzODVwBaH_tWu6HV2jHdwOciHaYKg/edit?tab=t.0
+Risk Management : https://docs.google.com/document/d/1U3XcoCLSrkeQf5sLgHIS153qTGFA1qcM_4ZZR_kKM8M/edit?tab=t.0
+Feedback Document : https://docs.google.com/document/d/1l1r-HCLpY4q3L92tEEquB7oW03fmuqmQKNi6TD9OXSs/edit?tab=t.0

@@ -1,4 +1,4 @@
-"""Lending: librarians check books out to members."""
+"""Lending: librarians check books out to members and back in."""
 
 import uuid
 from datetime import datetime, timedelta
@@ -8,13 +8,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_users_db_sqlalchemy.generics import GUID, TIMESTAMPAware, now_utc
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy import func, insert, literal, select
+from sqlalchemy import Select, func, insert, literal, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
 from lms.database import Database
 from lms.models import Book, Loan, User
+from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 from lms.permissions import Capability
 from lms.roles import Role
 
@@ -26,6 +27,8 @@ class LoanRefusal(StrEnum):
     BORROWER_NOT_FOUND = "LOAN_BORROWER_NOT_FOUND"
     NO_COPIES_AVAILABLE = "LOAN_NO_COPIES_AVAILABLE"
     ALREADY_BORROWED = "LOAN_ALREADY_BORROWED"
+    LOAN_NOT_FOUND = "LOAN_NOT_FOUND"
+    ALREADY_RETURNED = "LOAN_ALREADY_RETURNED"
 
 
 _REFUSAL_STATUS = {
@@ -33,6 +36,8 @@ _REFUSAL_STATUS = {
     LoanRefusal.BORROWER_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     LoanRefusal.NO_COPIES_AVAILABLE: status.HTTP_409_CONFLICT,
     LoanRefusal.ALREADY_BORROWED: status.HTTP_409_CONFLICT,
+    LoanRefusal.LOAN_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    LoanRefusal.ALREADY_RETURNED: status.HTTP_409_CONFLICT,
 }
 
 
@@ -65,6 +70,13 @@ class LoanRead(BaseModel):
     checked_out_at: datetime
     due_at: datetime
     returned_at: datetime | None
+
+
+class LoanPage(BaseModel):
+    """One page of loans. ``total`` counts every match, not just this page."""
+
+    items: list[LoanRead]
+    total: int
 
 
 async def find_borrower(session: AsyncSession, email: str) -> User | None:
@@ -167,19 +179,44 @@ async def check_out(
     raise LoanRefused(LoanRefusal.NO_COPIES_AVAILABLE)
 
 
-async def get_loan(session: AsyncSession, loan_id: int) -> LoanRead | None:
-    """The loan with ``loan_id`` in its staff-facing shape, or None."""
-    row = (
-        await session.execute(
-            select(Loan, Book.title, User.name, User.email)
-            .join(Book, Book.id == Loan.book_id)
-            .join(User, User.id == Loan.borrower_id)
-            .where(Loan.id == loan_id)
-        )
-    ).one_or_none()
-    if row is None:
-        return None
-    loan, book_title, borrower_name, borrower_email = row
+async def return_loan(
+    session: AsyncSession, *, loan_id: int, librarian: User, now: datetime
+) -> None:
+    """Mark loan ``loan_id`` returned, received by ``librarian``.
+
+    Raises ``LoanRefused`` if there is no such loan or it was already returned.
+
+    Example::
+
+        await return_loan(session, loan_id=7, librarian=staff, now=now_utc())
+    """
+    # The ``returned_at IS NULL`` guard makes a second return (a double click,
+    # or two librarians at once) a no-op instead of overwriting the first.
+    result = await session.execute(
+        update(Loan)
+        .where(Loan.id == loan_id, Loan.returned_at.is_(None))
+        .values(returned_at=now, returned_to_id=librarian.id)
+        .execution_options(synchronize_session=False)
+    )
+    await session.commit()
+    if result.rowcount == 1:
+        return
+    if await session.get(Loan, loan_id) is None:
+        raise LoanRefused(LoanRefusal.LOAN_NOT_FOUND)
+    raise LoanRefused(LoanRefusal.ALREADY_RETURNED)
+
+
+def _loan_rows() -> Select:
+    # populate_existing: a loan already in the session may predate an UPDATE.
+    return (
+        select(Loan, Book.title, User.name, User.email)
+        .join(Book, Book.id == Loan.book_id)
+        .join(User, User.id == Loan.borrower_id)
+        .execution_options(populate_existing=True)
+    )
+
+
+def _to_loan_read(loan: Loan, book_title: str, borrower_name: str, borrower_email: str) -> LoanRead:
     return LoanRead(
         id=loan.id,
         book_id=loan.book_id,
@@ -193,12 +230,33 @@ async def get_loan(session: AsyncSession, loan_id: int) -> LoanRead | None:
     )
 
 
+async def get_loan(session: AsyncSession, loan_id: int) -> LoanRead | None:
+    """The loan with ``loan_id`` in its staff-facing shape, or None."""
+    row = (await session.execute(_loan_rows().where(Loan.id == loan_id))).one_or_none()
+    return None if row is None else _to_loan_read(*row)
+
+
+async def list_active_loans(session: AsyncSession, *, limit: int, offset: int) -> LoanPage:
+    """One page of loans not yet returned, soonest due first.
+
+    Example::
+
+        page = await list_active_loans(session, limit=50, offset=0)
+    """
+    is_active = Loan.returned_at.is_(None)
+    total = await session.scalar(select(func.count()).select_from(Loan).where(is_active))
+    rows = await session.execute(
+        _loan_rows().where(is_active).order_by(Loan.due_at, Loan.id).limit(limit).offset(offset)
+    )
+    return LoanPage(items=[_to_loan_read(*row) for row in rows], total=total or 0)
+
+
 def _http_error(refused: LoanRefused) -> HTTPException:
     return HTTPException(status_code=_REFUSAL_STATUS[refused.refusal], detail=refused.refusal.value)
 
 
 def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> APIRouter:
-    """Router for ``POST /api/loans``. Staff only (``LEND_BOOKS``).
+    """Router for checkout, check-in and the active-loan list. Staff only (``LEND_BOOKS``).
 
     Example::
 
@@ -230,6 +288,30 @@ def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> A
         loan = await get_loan(session, loan_id)
         if loan is None:
             raise RuntimeError(f"loan {loan_id} vanished right after checkout")
+        return loan
+
+    @router.get("", response_model=LoanPage)
+    async def active_loans(
+        _: Annotated[User, Depends(lend)],
+        session: Annotated[AsyncSession, Depends(database.session)],
+        limit: Limit = PAGE_SIZE_DEFAULT,
+        offset: Offset = 0,
+    ) -> LoanPage:
+        return await list_active_loans(session, limit=limit, offset=offset)
+
+    @router.post("/{loan_id}/return", response_model=LoanRead)
+    async def check_in(
+        loan_id: int,
+        librarian: Annotated[User, Depends(lend)],
+        session: Annotated[AsyncSession, Depends(database.session)],
+    ) -> LoanRead:
+        try:
+            await return_loan(session, loan_id=loan_id, librarian=librarian, now=now_utc())
+        except LoanRefused as refused:
+            raise _http_error(refused) from None
+        loan = await get_loan(session, loan_id)
+        if loan is None:
+            raise RuntimeError(f"loan {loan_id} vanished right after check-in")
         return loan
 
     return router

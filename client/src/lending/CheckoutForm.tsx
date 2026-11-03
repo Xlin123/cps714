@@ -25,7 +25,7 @@ export function CheckoutForm({
   });
 
   return (
-    <form onSubmit={onSubmit}>
+    <form className="narrow" onSubmit={onSubmit}>
       <label htmlFor="checkout-book">Book</label>
       <select
         id="checkout-book"

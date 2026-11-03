@@ -37,15 +37,19 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 
 `GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1–100. The catalog page at `/` pages through it.
 
+Every list endpoint pages the same way (`server/src/lms/paging.py`).
+
 ## Lending
 
-Requires `lend_books` (librarian, admin). The Lending page (`/staff`) checks books out.
+Requires `lend_books` (librarian, admin). The Lending page (`/staff`) checks books out and back in.
 
 | Method | Path                       | Body                               | Result |
 |--------|----------------------------|------------------------------------|--------|
 | POST   | `/api/loans`               | JSON `{book_id, borrower_email}`   | 201 with the loan, due `LMS_LOAN_PERIOD_DAYS` from now |
+| GET    | `/api/loans?limit&offset`  | —                                  | active loans, soonest due first |
+| POST   | `/api/loans/{id}/return`   | —                                  | 200 with the returned loan |
 
-The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE` and `LOAN_ALREADY_BORROWED` (409). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
 
 ## Local development
 

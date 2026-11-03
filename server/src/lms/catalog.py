@@ -26,6 +26,7 @@ from lms.permissions import Capability
 DUPLICATE_ISBN = "CATALOG_DUPLICATE_ISBN"
 BOOK_NOT_FOUND = "CATALOG_BOOK_NOT_FOUND"
 BOOK_ON_LOAN = "CATALOG_BOOK_ON_LOAN"
+TOO_FEW_COPIES = "CATALOG_TOO_FEW_COPIES"
 
 
 class BookRead(BaseModel):
@@ -58,6 +59,10 @@ class BookCreate(BaseModel):
     isbn: str = Field(min_length=1, max_length=ISBN_MAX_LENGTH)
     category: str = Field(min_length=1, max_length=CATEGORY_MAX_LENGTH)
     total_copies: int = Field(ge=0)
+
+
+class BookUpdate(BookCreate):
+    """The complete editable representation of a catalog entry."""
 
 
 def available_copies(book: Book, active_loans: int) -> int:
@@ -149,6 +154,50 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
             ) from error
         await session.refresh(book)
         return to_book_read(book, active_loans=0)
+
+    @router.patch("/{book_id}", response_model=BookRead)
+    async def edit(
+        book_id: int,
+        payload: BookUpdate,
+        session: Annotated[AsyncSession, Depends(database.session)],
+        _: Annotated[User, Depends(manage_catalog)],
+    ) -> BookRead:
+        active_loans = (
+            select(func.count())
+            .select_from(Loan)
+            .where(Loan.book_id == book_id, Loan.returned_at.is_(None))
+            .scalar_subquery()
+        )
+        try:
+            result = await session.execute(
+                update(Book)
+                .where(
+                    Book.id == book_id,
+                    Book.retired_at.is_(None),
+                    active_loans <= payload.total_copies,
+                )
+                .values(**payload.model_dump())
+                .execution_options(synchronize_session=False)
+            )
+            await session.commit()
+        except IntegrityError as error:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=DUPLICATE_ISBN,
+            ) from error
+
+        book = await session.get(Book, book_id)
+        if book is None or book.retired_at is not None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=BOOK_NOT_FOUND)
+        if result.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=TOO_FEW_COPIES)
+        current_loans = await session.scalar(
+            select(func.count())
+            .select_from(Loan)
+            .where(Loan.book_id == book_id, Loan.returned_at.is_(None))
+        )
+        return to_book_read(book, current_loans or 0)
 
     @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def retire(

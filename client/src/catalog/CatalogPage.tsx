@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { useLoad } from '../hooks/useLoad';
+import { BookEditForm } from './BookEditForm';
+import { EditBookButton } from './EditBookButton';
 import { fetchBooks, PAGE_SIZE } from './api';
 import type { Book } from './api';
-import { RemoveBookButton } from './RemoveBookButton';
 
 function availability(book: Book): string {
   if (!book.is_available) return 'Unavailable';
@@ -14,6 +15,7 @@ function availability(book: Book): string {
 export function CatalogPage() {
   const { user } = useAuth();
   const [offset, setOffset] = useState(0);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const { state, reload } = useLoad(() => fetchBooks(offset), [offset]);
 
   if (state.status === 'failed') {
@@ -59,29 +61,47 @@ export function CatalogPage() {
               </thead>
               <tbody>
                 {page.items.map((book) => (
-                  <tr key={book.id}>
-                    <td>{book.title}</td>
-                    <td>{book.author}</td>
-                    <td className="category">{book.category}</td>
-                    <td className={book.is_available ? undefined : 'unavailable'}>
-                      {availability(book)}
-                    </td>
-                    {canManageCatalog && (
-                      <td>
-                        <RemoveBookButton
-                          bookId={book.id}
-                          title={book.title}
-                          onRemoved={() => {
-                            if (page.items.length === 1 && offset > 0) {
-                              setOffset(offset - PAGE_SIZE);
-                            } else {
-                              reload();
-                            }
-                          }}
-                        />
+                  <Fragment key={book.id}>
+                    <tr>
+                      <td>{book.title}</td>
+                      <td>{book.author}</td>
+                      <td className="category">{book.category}</td>
+                      <td className={book.is_available ? undefined : 'unavailable'}>
+                        {availability(book)}
                       </td>
+                      {canManageCatalog && (
+                        <td>
+                          <EditBookButton
+                            title={book.title}
+                            onEdit={() => setEditingBook(book)}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                    {editingBook?.id === book.id && (
+                      <tr className="edit-row">
+                        <td colSpan={canManageCatalog ? 5 : 4}>
+                          <BookEditForm
+                            key={editingBook.id}
+                            book={editingBook}
+                            onSaved={(updated) => {
+                              setEditingBook(updated);
+                              reload();
+                            }}
+                            onRemoved={() => {
+                              setEditingBook(null);
+                              if (page.items.length === 1 && offset > 0) {
+                                setOffset(offset - PAGE_SIZE);
+                              } else {
+                                reload();
+                              }
+                            }}
+                            onCancel={() => setEditingBook(null)}
+                          />
+                        </td>
+                      </tr>
                     )}
-                  </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

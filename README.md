@@ -47,6 +47,11 @@ Every list endpoint pages the same way (`server/src/lms/paging.py`).
 
 Librarians and admins can add a book from the Lending page or with `POST /api/books`. Send JSON containing `title`, `author`, `isbn`, `category`, and `total_copies`. Duplicate ISBNs are rejected, and new books immediately appear in the public catalog.
 
+Catalog managers can edit a book with `PATCH /api/books/{id}`. The edit form
+changes title, author, ISBN, genre, and total copies. Available copies remain
+computed from active loans, and total copies cannot be reduced below the number
+currently on loan.
+
 Catalog managers can remove a book with `DELETE /api/books/{id}`. Removal is a
 soft delete: the book disappears from browsing and cannot be checked out, while
 its loan history remains intact. A book with active loans must be checked in

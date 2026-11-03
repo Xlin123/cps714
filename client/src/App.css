@@ -197,15 +197,7 @@
   color: #c0392b;
 }
 
-.catalog .inline-action {
-  display: block;
-}
-
-.catalog .inline-action button {
-  margin-top: 0;
-}
-
-.catalog button.danger {
+.catalog button.icon-button {
   display: grid;
   width: 34px;
   height: 34px;
@@ -216,20 +208,91 @@
   border-color: transparent;
 }
 
-.catalog button.danger:hover:not(:disabled),
-.catalog button.danger:focus-visible {
-  color: #c0392b;
-  background: rgba(192, 57, 43, 0.1);
-  border-color: rgba(192, 57, 43, 0.35);
+.catalog button.icon-button:hover:not(:disabled),
+.catalog button.icon-button:focus-visible {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
 }
 
-.catalog button.danger:focus-visible {
-  outline: 2px solid #c0392b;
+.catalog button.icon-button:focus-visible {
+  outline: 2px solid var(--accent-border);
   outline-offset: 2px;
 }
 
 .catalog .action-column {
   width: 34px;
+}
+
+.book-edit-panel {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+  scroll-margin-top: 24px;
+}
+
+.catalog .edit-row > td {
+  padding: 0;
+  background: var(--code-bg);
+}
+
+.catalog .edit-row .book-edit-panel {
+  margin: 12px;
+  background: var(--bg);
+}
+
+.edit-panel-heading,
+.edit-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-panel-heading {
+  justify-content: space-between;
+}
+
+.edit-panel-heading h2 {
+  margin: 0;
+}
+
+.book-edit-panel > p {
+  margin: 8px 0 16px;
+}
+
+.edit-panel-actions {
+  margin-top: 14px;
+}
+
+.edit-panel-actions button {
+  margin-top: 12px;
+}
+
+.edit-panel-actions .remove-book {
+  display: inline-grid;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 10px 12px;
+  place-items: center;
+  color: #fff;
+  background: #d33a3a;
+  border: 0;
+  outline: 0;
+}
+
+.edit-panel-actions .remove-book:hover:not(:disabled) {
+  background: #b92e2e;
+}
+
+.edit-panel-actions .remove-book:focus-visible {
+  box-shadow: 0 0 0 3px rgba(211, 58, 58, 0.28);
+}
+
+.edit-panel-actions .cancel-edit {
+  margin-left: auto;
 }
 
 .pager {

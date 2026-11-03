@@ -2,7 +2,8 @@
 
 ## Lucide icons
 
-The catalog removal button includes the Lucide `trash-2` SVG icon from
+The catalog edit controls include Lucide `pencil` and `trash-2` SVG icons from
+<https://lucide.dev/icons/pencil> and
 <https://lucide.dev/icons/trash-2>.
 
 ISC License

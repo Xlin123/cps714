@@ -47,3 +47,12 @@ new catalog record.
 small additive schema migration to add `retired_at` to existing databases.
 Restoring a retired title or reusing its ISBN will require a later explicit
 catalog operation.
+
+## 2026-11-03: Editing catalog entries
+
+`PATCH /api/books/{id}` accepts the complete editable representation of a
+book: title, author, ISBN, genre/category, and total copies. The update is one
+conditional statement, so a checkout racing an edit cannot leave total copies
+below the active-loan count. Duplicate ISBNs retain the same refusal code as
+book creation. Available copies are always derived from active loans and are
+never edited directly.

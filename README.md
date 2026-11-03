@@ -15,12 +15,12 @@ Stack: FastAPI (Python 3.12, managed with [uv](https://docs.astral.sh/uv/)) back
 |--------|-----------------------|-----------------------------------------|-------------------------------|
 | POST   | `/api/auth/register`  | JSON `{email, password, name}`          | 201 with the new user         |
 | POST   | `/api/auth/login`     | form `username=<email>&password=...`    | 204 and sets the cookie       |
-| POST   | `/api/auth/logout`    | —                                       | 204 and revokes the session   |
-| GET    | `/api/auth/me`        | —                                       | the signed-in user (with `capabilities`), or 401 |
+| POST   | `/api/auth/logout`    | -                                       | 204 and revokes the session   |
+| GET    | `/api/auth/me`        | -                                       | the signed-in user (with `capabilities`), or 401 |
 
 ## Role-based access
 
-What each role may do lives in one place, `server/src/lms/permissions.py` (`ROLE_CAPABILITIES`), mirroring the table in `docs/REQUIREMENTS.md` §3. `/api/auth/me` returns the signed-in user's `capabilities`, and the client shows or hides links and pages from that list; it keeps no role table of its own.
+What each role may do lives in one place, `server/src/lms/permissions.py` (`ROLE_CAPABILITIES`), mirroring the table in `docs/REQUIREMENTS.md` section 3. `/api/auth/me` returns the signed-in user's `capabilities`, and the client shows or hides links and pages from that list; it keeps no role table of its own.
 
 Protecting an endpoint:
 
@@ -33,16 +33,19 @@ async def active_loans(user: Annotated[User, Depends(lend)]) -> ...: ...
 
 Signed-out callers get 401; signed-in callers whose role lacks the capability get 403.
 
-| Capability     | Roles            | Pages and endpoints                  |
-|----------------|------------------|--------------------------------------|
-| `lend_books`   | librarian, admin | `/staff` (Lending), `/api/loans`     |
-| `manage_staff` | admin            | `/admin` (Staff accounts), `/api/staff` |
+| Capability       | Roles            | Pages and endpoints                     |
+|------------------|------------------|-----------------------------------------|
+| `lend_books`     | librarian, admin | `/staff` (Lending), `/api/loans`        |
+| `manage_staff`   | admin            | `/admin` (Staff accounts), `/api/staff` |
+| `manage_catalog` | librarian, admin | `/staff` (Add a book), `/api/books`     |
 
 ## Catalog
 
-`GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1–100. The catalog page at `/` pages through it.
+`GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1-100. The catalog page at `/` pages through it.
 
 Every list endpoint pages the same way (`server/src/lms/paging.py`).
+
+Librarians and admins can add a book from the Lending page or with `POST /api/books`. Send JSON containing `title`, `author`, `isbn`, `category`, and `total_copies`. Duplicate ISBNs are rejected, and new books immediately appear in the public catalog.
 
 ## Lending
 
@@ -51,8 +54,8 @@ Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 | Method | Path                       | Body                               | Result |
 |--------|----------------------------|------------------------------------|--------|
 | POST   | `/api/loans`               | JSON `{book_id, borrower_email}`   | 201 with the loan, due `LMS_LOAN_PERIOD_DAYS` from now |
-| GET    | `/api/loans?limit&offset`  | —                                  | active loans, soonest due first |
-| POST   | `/api/loans/{id}/return`   | —                                  | 200 with the returned loan |
+| GET    | `/api/loans?limit&offset`  | -                                  | active loans, soonest due first |
+| POST   | `/api/loans/{id}/return`   | -                                  | 200 with the returned loan |
 
 The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
 
@@ -63,14 +66,14 @@ Requires `manage_staff` (admin). The Staff accounts page (`/admin`) creates libr
 | Method | Path                     | Body                          | Result |
 |--------|--------------------------|-------------------------------|--------|
 | POST   | `/api/staff`             | JSON `{email, name, password}` | 201 with the new librarian; there is no `role` field |
-| GET    | `/api/staff?limit&offset` | —                            | librarian accounts |
+| GET    | `/api/staff?limit&offset` | -                            | librarian accounts |
 | PATCH  | `/api/staff/{id}`        | JSON `{is_active}`            | 200; deactivating signs them out at once |
 
 Only librarian accounts can be changed (`STAFF_NOT_FOUND` otherwise). See `docs/staff-accounts/decisions.md`.
 
 ## Adding a feature
 
-- Server: a module in `server/src/lms/` with its schemas, logic and a router factory that takes only what it needs; add the router to the list in `create_app` (`app.py`). Guard endpoints with a capability from `permissions.py`, and add the new capability to `ENDPOINT_FOR` and `EXPECTED` in `tests/test_permissions.py`.
+- Server: a module in `server/src/lms/` with its schemas, logic and a router factory that takes only what it needs; add the router to the list in `create_app` (`app.py`). Guard endpoints with a capability from `permissions.py`, and add the new capability to `GUARDED_REQUEST_FOR` and `EXPECTED` in `tests/test_permissions.py`.
 - Refusals: raise a stable code as `detail`, and add its user-facing text to `ERROR_MESSAGES` in `client/src/api/http.ts`.
 - Client: a folder in `client/src/<feature>/` with an `api.ts` built on `getJson`/`send` from `api/http.ts`, pages using `useLoad` for data and `useSubmit` (or `components/ActionButton`) for actions. Mirror new capabilities in `client/src/auth/api.ts`.
 - Tables: new tables are created at startup. Changing an existing table needs a database reset (delete `lms.sqlite3`) until there is a migration tool.

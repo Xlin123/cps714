@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../auth/useAuth';
 import { useLoad } from '../hooks/useLoad';
 import { fetchBooks, PAGE_SIZE } from './api';
 import type { Book } from './api';
@@ -9,6 +11,7 @@ function availability(book: Book): string {
 }
 
 export function CatalogPage() {
+  const { user } = useAuth();
   const [offset, setOffset] = useState(0);
   const { state } = useLoad(() => fetchBooks(offset), [offset]);
 
@@ -23,7 +26,14 @@ export function CatalogPage() {
 
   return (
     <div className="page wide">
-      <h1>Catalogue</h1>
+      <div className="page-heading">
+        <h1>Catalogue</h1>
+        {user?.capabilities.includes('manage_catalog') && (
+          <Link className="button" to="/staff#add-book">
+            Add book
+          </Link>
+        )}
+      </div>
       {page.total === 0 ? (
         <p>No books in the catalogue yet.</p>
       ) : (

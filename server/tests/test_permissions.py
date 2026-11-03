@@ -9,16 +9,30 @@ from tests.conftest import login, seed_account
 # docs/REQUIREMENTS.md §3, written out independently of ROLE_CAPABILITIES.
 EXPECTED = {
     (Role.MEMBER, Capability.LEND_BOOKS): False,
-    (Role.LIBRARIAN, Capability.LEND_BOOKS): True,
-    (Role.ADMIN, Capability.LEND_BOOKS): True,
+    (Role.MEMBER, Capability.MANAGE_CATALOG): False,
     (Role.MEMBER, Capability.MANAGE_STAFF): False,
+    (Role.LIBRARIAN, Capability.LEND_BOOKS): True,
+    (Role.LIBRARIAN, Capability.MANAGE_CATALOG): True,
     (Role.LIBRARIAN, Capability.MANAGE_STAFF): False,
+    (Role.ADMIN, Capability.LEND_BOOKS): True,
+    (Role.ADMIN, Capability.MANAGE_CATALOG): True,
     (Role.ADMIN, Capability.MANAGE_STAFF): True,
 }
-# A read-only endpoint guarded by each capability, to check enforcement per role.
-ENDPOINT_FOR = {
-    Capability.LEND_BOOKS: "/api/loans",
-    Capability.MANAGE_STAFF: "/api/staff",
+# One request guarded by each capability, to check enforcement per role.
+GUARDED_REQUEST_FOR = {
+    Capability.LEND_BOOKS: ("GET", "/api/loans", None),
+    Capability.MANAGE_STAFF: ("GET", "/api/staff", None),
+    Capability.MANAGE_CATALOG: (
+        "POST",
+        "/api/books",
+        {
+            "title": "Permission Test",
+            "author": "Test Author",
+            "isbn": "permission-test",
+            "category": "Testing",
+            "total_copies": 1,
+        },
+    ),
 }
 
 
@@ -33,12 +47,17 @@ def test_capability_map_matches_requirements(role: Role, capability: Capability)
 
 
 def test_every_capability_has_an_endpoint_to_check() -> None:
-    assert set(ENDPOINT_FOR) == set(Capability)
+    assert set(GUARDED_REQUEST_FOR) == set(Capability)
 
 
-@pytest.mark.parametrize("path", sorted(ENDPOINT_FOR.values()))
-def test_guarded_endpoints_are_401_when_signed_out(client: TestClient, path: str) -> None:
-    assert client.get(path).status_code == 401
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [(method, path, body) for method, path, body in GUARDED_REQUEST_FOR.values()],
+)
+def test_guarded_endpoints_are_401_when_signed_out(
+    client: TestClient, method: str, path: str, body: dict[str, object] | None
+) -> None:
+    assert client.request(method, path, json=body).status_code == 401
 
 
 @pytest.mark.parametrize(("role", "capability"), list(EXPECTED))
@@ -48,9 +67,13 @@ def test_guarded_endpoints_enforce_each_role(
     seed_account(settings, f"{role.value}@example.com", role)
     login(client, f"{role.value}@example.com")
 
-    response = client.get(ENDPOINT_FOR[capability])
+    method, path, body = GUARDED_REQUEST_FOR[capability]
+    response = client.request(method, path, json=body)
 
-    assert response.status_code == (200 if EXPECTED[role, capability] else 403)
+    if EXPECTED[role, capability]:
+        assert response.status_code < 300
+    else:
+        assert response.status_code == 403
 
 
 @pytest.mark.parametrize("role", list(Role))

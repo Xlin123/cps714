@@ -1,4 +1,5 @@
 import { useLoad } from '../hooks/useLoad';
+import { AddBookForm } from '../catalog/AddBookForm';
 import { fetchActiveLoans, fetchBookChoices, LENDING_LIST_LIMIT } from './api';
 import { ActiveLoans } from './ActiveLoans';
 import { CheckoutForm } from './CheckoutForm';
@@ -25,6 +26,7 @@ export function LendingPage() {
   return (
     <div className="page wide">
       <h1>Lending</h1>
+      <AddBookForm onAdded={books.reload} />
       <h2>Check out</h2>
       {books.state.status === 'loading' && <p>Loading…</p>}
       {books.state.status === 'failed' && (

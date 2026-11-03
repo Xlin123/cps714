@@ -42,6 +42,16 @@ export async function createBook(input: BookInput): Promise<Book> {
   return res.json();
 }
 
+/** Updates a book. The server only permits this for catalog managers. */
+export async function updateBook(bookId: number, input: BookInput): Promise<Book> {
+  const res = await send(
+    `/api/books/${bookId}`,
+    jsonBody('PATCH', input),
+    'Please check the book details and try again.',
+  );
+  return res.json();
+}
+
 /** Removes a book from the active catalog while preserving loan history. */
 export async function deleteBook(bookId: number): Promise<void> {
   await send(`/api/books/${bookId}`, { method: 'DELETE' }, 'Could not remove the book.');

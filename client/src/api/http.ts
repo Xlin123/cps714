@@ -18,6 +18,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   CATALOG_DUPLICATE_ISBN: 'A book with this ISBN already exists.',
   CATALOG_BOOK_NOT_FOUND: 'That book is no longer in the catalogue.',
   CATALOG_BOOK_ON_LOAN: 'Check in all copies before removing this book.',
+  CATALOG_TOO_FEW_COPIES: 'Copies cannot be fewer than the number currently on loan.',
 };
 
 async function errorFrom(res: Response, fallback: string): Promise<ApiError> {

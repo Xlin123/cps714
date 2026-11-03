@@ -28,7 +28,8 @@
   margin-top: 8px;
 }
 
-.page input {
+.page input,
+.page select {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
@@ -39,7 +40,8 @@
   border-radius: 6px;
 }
 
-.page input:focus {
+.page input:focus,
+.page select:focus {
   outline: 2px solid var(--accent-border);
   outline-offset: 1px;
 }

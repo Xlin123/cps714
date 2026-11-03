@@ -14,6 +14,9 @@ EXPECTED = {
     (Role.LIBRARIAN, Capability.VIEW_ADMIN_AREA): False,
     (Role.ADMIN, Capability.VIEW_STAFF_AREA): True,
     (Role.ADMIN, Capability.VIEW_ADMIN_AREA): True,
+    (Role.MEMBER, Capability.LEND_BOOKS): False,
+    (Role.LIBRARIAN, Capability.LEND_BOOKS): True,
+    (Role.ADMIN, Capability.LEND_BOOKS): True,
 }
 AREA_FOR = {
     Capability.VIEW_STAFF_AREA: "/api/staff/area",
@@ -36,7 +39,7 @@ def test_areas_are_401_when_signed_out(client: TestClient, path: str) -> None:
     assert client.get(path).status_code == 401
 
 
-@pytest.mark.parametrize(("role", "capability"), list(EXPECTED))
+@pytest.mark.parametrize(("role", "capability"), [pair for pair in EXPECTED if pair[1] in AREA_FOR])
 def test_area_endpoints_enforce_each_role(
     client: TestClient, settings: Settings, role: Role, capability: Capability
 ) -> None:

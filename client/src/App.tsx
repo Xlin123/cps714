@@ -4,6 +4,7 @@ import type { Capability } from './auth/api';
 import { useAuth } from './auth/useAuth';
 import { AreaPage } from './areas/AreaPage';
 import { CatalogPage } from './catalog/CatalogPage';
+import { LendingPage } from './lending/LendingPage';
 import { NavBar } from './components/NavBar';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -75,8 +76,8 @@ function App() {
         <Route
           path="/staff"
           element={
-            <RequireCapability capability="view_staff_area">
-              <AreaPage area="staff" />
+            <RequireCapability capability="lend_books">
+              <LendingPage />
             </RequireCapability>
           }
         />

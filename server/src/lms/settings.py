@@ -7,6 +7,7 @@ from pathlib import Path
 
 DEFAULT_DB_URL = "sqlite+aiosqlite:///./lms.sqlite3"
 DEFAULT_SESSION_LIFETIME_SECONDS = 60 * 60 * 24
+DEFAULT_LOAN_PERIOD_DAYS = 14
 
 
 class SettingsError(ValueError):
@@ -30,6 +31,8 @@ class Settings:
     client_dist_dir: Path | None = None
     # Seeds fixed, publicly known logins. Development only.
     is_demo_data_enabled: bool = False
+    # How long a checkout lasts before the loan is due.
+    loan_period_days: int = DEFAULT_LOAN_PERIOD_DAYS
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -49,6 +52,9 @@ class Settings:
             ),
             client_dist_dir=Path(client_dist) if client_dist else None,
             is_demo_data_enabled=_parse_bool(source, "LMS_DEMO_DATA", default=False),
+            loan_period_days=_parse_positive_int(
+                source, "LMS_LOAN_PERIOD_DAYS", DEFAULT_LOAN_PERIOD_DAYS
+            ),
         )
 
 

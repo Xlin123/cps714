@@ -3,6 +3,7 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -16,6 +17,7 @@ from lms.auth import Auth
 from lms.catalog import catalog_router
 from lms.database import Database
 from lms.demo import demo_router, seed_demo_accounts, seed_demo_books
+from lms.loans import loans_router
 from lms.models import User
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
@@ -57,6 +59,7 @@ def create_app(
     *,
     client_dist_dir: Path | None,
     is_demo_data_enabled: bool,
+    loan_period: timedelta,
 ) -> FastAPI:
     """Build the app. The app takes ownership of ``database`` and disposes it on shutdown.
 
@@ -68,6 +71,7 @@ def create_app(
             Auth(database, settings),
             client_dist_dir=settings.client_dist_dir,
             is_demo_data_enabled=settings.is_demo_data_enabled,
+            loan_period=timedelta(days=settings.loan_period_days),
         )
     """
 
@@ -83,8 +87,13 @@ def create_app(
 
     app = FastAPI(title="LMS", lifespan=lifespan)
     app.include_router(_auth_router(auth))
-    app.include_router(catalog_router(database))
-    app.include_router(areas_router(auth))
+    # Each feature router takes only what it needs; add new features here.
+    for feature_router in (
+        catalog_router(database),
+        areas_router(auth),
+        loans_router(database, auth, loan_period=loan_period),
+    ):
+        app.include_router(feature_router)
     if is_demo_data_enabled:
         app.include_router(demo_router())
 
@@ -106,4 +115,5 @@ def app_from_env() -> FastAPI:
         Auth(database, settings),
         client_dist_dir=settings.client_dist_dir,
         is_demo_data_enabled=settings.is_demo_data_enabled,
+        loan_period=timedelta(days=settings.loan_period_days),
     )

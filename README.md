@@ -2,7 +2,7 @@
 
 See `docs/REQUIREMENTS.md` for the full product backlog and `docs/management/` for Sprint management docs (team roles, communication plan, risk register, meeting minutes).
 
-Stack: FastAPI (Python 3.12, managed with [uv](https://docs.astral.sh/uv/)) backend, React + TypeScript (Vite) frontend, SQLite for storage. Accounts and sessions are handled by [fastapi-users](https://fastapi-users.github.io/fastapi-users/). Design decisions are recorded per feature in `docs/<feature>/decisions.md` (`auth`, `catalog`).
+Stack: FastAPI (Python 3.12, managed with [uv](https://docs.astral.sh/uv/)) backend, React + TypeScript (Vite) frontend, SQLite for storage. Accounts and sessions are handled by [fastapi-users](https://fastapi-users.github.io/fastapi-users/). Design decisions are recorded per feature in `docs/<feature>/decisions.md` (`auth`, `catalog`, `borrowing`).
 
 ## How auth works
 
@@ -31,11 +31,21 @@ staff = auth.require_capability(Capability.VIEW_STAFF_AREA)
 async def staff_area(user: Annotated[User, Depends(staff)]) -> ...: ...
 ```
 
-Signed-out callers get 401; signed-in callers whose role lacks the capability get 403. `/staff` (librarian, admin) and `/admin` (admin) are placeholder pages backed by `GET /api/staff/area` and `GET /api/admin/area`.
+Signed-out callers get 401; signed-in callers whose role lacks the capability get 403. `/admin` (admin) is a placeholder page backed by `GET /api/admin/area`; `GET /api/staff/area` remains as a placeholder endpoint.
 
 ## Catalog
 
-`GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` and `is_available`. `limit` is 1–100. The catalog page at `/` pages through it.
+`GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1–100. The catalog page at `/` pages through it.
+
+## Lending
+
+Requires `lend_books` (librarian, admin). The Lending page (`/staff`) checks books out.
+
+| Method | Path                       | Body                               | Result |
+|--------|----------------------------|------------------------------------|--------|
+| POST   | `/api/loans`               | JSON `{book_id, borrower_email}`   | 201 with the loan, due `LMS_LOAN_PERIOD_DAYS` from now |
+
+The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE` and `LOAN_ALREADY_BORROWED` (409). Rules and the race-safety design: `docs/borrowing/decisions.md`.
 
 ## Local development
 

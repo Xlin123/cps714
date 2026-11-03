@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.database import Database
-from lms.models import Book
+from lms.models import Book, Loan
 
 PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 100
@@ -34,18 +34,18 @@ class BookPage(BaseModel):
     total: int
 
 
-def available_copies(book: Book) -> int:
+def available_copies(book: Book, active_loans: int) -> int:
     """Copies that can be lent right now.
 
-    Every copy is available until loans exist; loans will subtract their active
-    count here.
+    Clamped at zero so a book whose copy count was cut below its active loans
+    reads as unavailable rather than negative.
     """
-    return book.total_copies
+    return max(book.total_copies - active_loans, 0)
 
 
-def to_book_read(book: Book) -> BookRead:
+def to_book_read(book: Book, active_loans: int) -> BookRead:
     """Convert a stored book into its public shape."""
-    available = available_copies(book)
+    available = available_copies(book, active_loans)
     return BookRead(
         id=book.id,
         title=book.title,
@@ -66,10 +66,23 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
         page = await list_books(session, limit=50, offset=0)
     """
     total = await session.scalar(select(func.count()).select_from(Book))
-    books = await session.scalars(
-        select(Book).order_by(Book.title, Book.id).limit(limit).offset(offset)
+    active = (
+        select(Loan.book_id, func.count().label("count"))
+        .where(Loan.returned_at.is_(None))
+        .group_by(Loan.book_id)
+        .subquery()
     )
-    return BookPage(items=[to_book_read(book) for book in books], total=total or 0)
+    rows = await session.execute(
+        select(Book, func.coalesce(active.c.count, 0))
+        .outerjoin(active, active.c.book_id == Book.id)
+        .order_by(Book.title, Book.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return BookPage(
+        items=[to_book_read(book, active_loans) for book, active_loans in rows],
+        total=total or 0,
+    )
 
 
 def catalog_router(database: Database) -> APIRouter:

@@ -24,3 +24,8 @@ harmless. The sample ISBNs are not checked against real editions.
 - `available_copies` equals `total_copies` until loans exist (Sprint 3). It is
   computed in one function, `catalog.available_copies`, which loans will change.
 - Search (LMS-4) is not included.
+
+## 2026-11-02: Availability from loans
+
+`available_copies` is now `total_copies` minus active loans; see
+`docs/borrowing/decisions.md`.

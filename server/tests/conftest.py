@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from lms.roles import Role
 from lms.settings import Settings
 
 PASSWORD = "correct horse battery"
+LOAN_PERIOD = timedelta(days=14)
 
 
 @pytest.fixture
@@ -29,7 +31,14 @@ def settings(tmp_path: Path) -> Settings:
 def auth_and_app(settings: Settings) -> tuple[Auth, FastAPI]:
     database = Database(settings.db_url)
     auth = Auth(database, settings)
-    return auth, create_app(database, auth, client_dist_dir=None, is_demo_data_enabled=False)
+    app = create_app(
+        database,
+        auth,
+        client_dist_dir=None,
+        is_demo_data_enabled=False,
+        loan_period=LOAN_PERIOD,
+    )
+    return auth, app
 
 
 @pytest.fixture

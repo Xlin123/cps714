@@ -21,13 +21,16 @@ class Capability(StrEnum):
 
     VIEW_STAFF_AREA = "view_staff_area"
     VIEW_ADMIN_AREA = "view_admin_area"
+    LEND_BOOKS = "lend_books"
 
 
 ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
     {
         Role.MEMBER: frozenset(),
-        Role.LIBRARIAN: frozenset({Capability.VIEW_STAFF_AREA}),
-        Role.ADMIN: frozenset({Capability.VIEW_STAFF_AREA, Capability.VIEW_ADMIN_AREA}),
+        Role.LIBRARIAN: frozenset({Capability.VIEW_STAFF_AREA, Capability.LEND_BOOKS}),
+        Role.ADMIN: frozenset(
+            {Capability.VIEW_STAFF_AREA, Capability.VIEW_ADMIN_AREA, Capability.LEND_BOOKS}
+        ),
     }
 )
 
@@ -37,7 +40,7 @@ def capabilities_for(role: Role) -> frozenset[Capability]:
 
     Example::
 
-        capabilities_for(Role.LIBRARIAN)  # frozenset({Capability.VIEW_STAFF_AREA})
+        capabilities_for(Role.LIBRARIAN)  # {VIEW_STAFF_AREA, LEND_BOOKS}
     """
     return ROLE_CAPABILITIES[role]
 

@@ -3,7 +3,7 @@ import { jsonBody, send } from '../api/http';
 export type Role = 'member' | 'librarian' | 'admin';
 
 /** Mirrors the server's Capability enum; the server decides who holds which. */
-export type Capability = 'view_staff_area' | 'view_admin_area';
+export type Capability = 'view_staff_area' | 'view_admin_area' | 'lend_books';
 
 export interface SessionUser {
   id: string;

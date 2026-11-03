@@ -8,6 +8,10 @@ export class ApiError extends Error {}
 const ERROR_MESSAGES: Record<string, string> = {
   LOGIN_BAD_CREDENTIALS: 'Incorrect email or password.',
   REGISTER_USER_ALREADY_EXISTS: 'An account already exists for this email.',
+  LOAN_BOOK_NOT_FOUND: 'That book is no longer in the catalogue.',
+  LOAN_BORROWER_NOT_FOUND: 'No active member account has that email.',
+  LOAN_NO_COPIES_AVAILABLE: 'Every copy of that book is already on loan.',
+  LOAN_ALREADY_BORROWED: 'That member already has this book on loan.',
 };
 
 async function errorFrom(res: Response, fallback: string): Promise<ApiError> {

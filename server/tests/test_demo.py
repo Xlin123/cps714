@@ -9,7 +9,7 @@ from lms.database import Database
 from lms.demo import DEMO_ACCOUNTS, DEMO_BOOKS, DemoSeedError, seed_demo_accounts
 from lms.roles import Role
 from lms.settings import Settings
-from tests.conftest import login, seed_account
+from tests.conftest import LOAN_PERIOD, login, seed_account
 
 
 def demo_client(settings: Settings, *, is_enabled: bool) -> TestClient:
@@ -19,6 +19,7 @@ def demo_client(settings: Settings, *, is_enabled: bool) -> TestClient:
         Auth(database, settings),
         client_dist_dir=None,
         is_demo_data_enabled=is_enabled,
+        loan_period=LOAN_PERIOD,
     )
     return TestClient(app)
 

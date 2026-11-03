@@ -1,8 +1,12 @@
-"""SQLAlchemy tables for accounts and login sessions."""
+"""SQLAlchemy tables for accounts, login sessions, the catalog and loans."""
+
+import uuid
+from datetime import datetime
 
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
 from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyBaseAccessTokenTableUUID
-from sqlalchemy import CheckConstraint, Enum, Integer, String
+from fastapi_users_db_sqlalchemy.generics import GUID, TIMESTAMPAware
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from lms.roles import Role
@@ -49,3 +53,37 @@ class Book(Base):
     isbn: Mapped[str] = mapped_column(String(ISBN_MAX_LENGTH), nullable=False, unique=True)
     category: Mapped[str] = mapped_column(String(CATEGORY_MAX_LENGTH), nullable=False)
     total_copies: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class Loan(Base):
+    """One copy of a book lent to a member. Active until ``returned_at`` is set.
+
+    Times are UTC. A member may hold at most one active loan per book.
+    """
+
+    __tablename__ = "loan"
+    __table_args__ = (
+        Index(
+            "one_active_loan_per_borrower_and_book",
+            "book_id",
+            "borrower_id",
+            unique=True,
+            sqlite_where=text("returned_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # RESTRICT: a book with loan records must not vanish from under them.
+    book_id: Mapped[int] = mapped_column(
+        ForeignKey("book.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    borrower_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("user.id"), nullable=False, index=True
+    )
+    checked_out_by_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("user.id"), nullable=False
+    )
+    checked_out_at: Mapped[datetime] = mapped_column(TIMESTAMPAware(timezone=True), nullable=False)
+    due_at: Mapped[datetime] = mapped_column(TIMESTAMPAware(timezone=True), nullable=False)
+    returned_at: Mapped[datetime | None] = mapped_column(TIMESTAMPAware(timezone=True))
+    returned_to_id: Mapped[uuid.UUID | None] = mapped_column(GUID, ForeignKey("user.id"))

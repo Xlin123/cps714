@@ -288,3 +288,139 @@ def test_racing_checkouts_lend_the_last_copy_only_once(settings: Settings) -> No
 
     assert Counter(outcomes) == {"lent": 1, LoanRefusal.NO_COPIES_AVAILABLE.value: racers - 1}
     assert loans == 1
+
+
+def check_in(client: TestClient, loan_id: int):
+    return client.post(f"/api/loans/{loan_id}/return")
+
+
+def lend(client: TestClient, settings: Settings, title: str, *, copies: int = 1) -> dict:
+    add_books(settings, [book(title, copies=copies)])
+    response = checkout(client, catalog_entry(client, title)["id"])
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_check_in_marks_the_loan_returned(librarian: TestClient, settings: Settings) -> None:
+    loan = lend(librarian, settings, "Dracula")
+
+    response = check_in(librarian, loan["id"])
+
+    assert response.status_code == 200
+    returned = response.json()
+    assert returned["id"] == loan["id"]
+    assert returned["returned_at"] is not None
+    assert datetime.fromisoformat(returned["returned_at"]) >= datetime.fromisoformat(
+        loan["checked_out_at"]
+    )
+
+
+def test_check_in_restores_availability(librarian: TestClient, settings: Settings) -> None:
+    loan = lend(librarian, settings, "Moby-Dick")
+    assert catalog_entry(librarian, "Moby-Dick")["is_available"] is False
+
+    check_in(librarian, loan["id"])
+
+    entry = catalog_entry(librarian, "Moby-Dick")
+    assert entry["available_copies"] == 1
+    assert entry["is_available"] is True
+
+
+def test_check_in_records_who_received_the_book(librarian: TestClient, settings: Settings) -> None:
+    loan = lend(librarian, settings, "Dracula")
+
+    check_in(librarian, loan["id"])
+
+    async def run() -> tuple[uuid.UUID | None, uuid.UUID | None]:
+        database = Database(settings.db_url)
+        try:
+            async with database.session_maker() as session:
+                received_by = await session.scalar(
+                    select(Loan.returned_to_id).where(Loan.id == loan["id"])
+                )
+                librarian_id = await session.scalar(
+                    select(User.id).where(User.email == "librarian@example.com")
+                )
+                return received_by, librarian_id
+        finally:
+            await database.dispose()
+
+    received_by, librarian_id = asyncio.run(run())
+    assert received_by is not None
+    assert received_by == librarian_id
+
+
+def test_a_second_check_in_is_refused(librarian: TestClient, settings: Settings) -> None:
+    loan = lend(librarian, settings, "Dracula")
+    check_in(librarian, loan["id"])
+
+    response = check_in(librarian, loan["id"])
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "LOAN_ALREADY_RETURNED"
+    assert catalog_entry(librarian, "Dracula")["available_copies"] == 1
+
+
+def test_check_in_of_an_unknown_loan_is_404(librarian: TestClient) -> None:
+    response = check_in(librarian, 999)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "LOAN_NOT_FOUND"
+
+
+def test_a_returned_book_can_be_borrowed_again(librarian: TestClient, settings: Settings) -> None:
+    loan = lend(librarian, settings, "Moby-Dick")
+    check_in(librarian, loan["id"])
+
+    assert checkout(librarian, loan["book_id"]).status_code == 201
+
+
+def test_active_loans_lists_unreturned_loans_soonest_due_first(
+    librarian: TestClient, settings: Settings
+) -> None:
+    first = lend(librarian, settings, "Alpha")
+    returned = lend(librarian, settings, "Bravo")
+    last = lend(librarian, settings, "Charlie")
+    check_in(librarian, returned["id"])
+
+    page = librarian.get("/api/loans").json()
+
+    assert page["total"] == 2
+    assert [loan["id"] for loan in page["items"]] == [first["id"], last["id"]]
+    item = page["items"][0]
+    assert item["book_title"] == "Alpha"
+    assert item["borrower_email"] == READER
+    assert item["returned_at"] is None
+
+
+def test_active_loans_page_with_limit_and_offset(librarian: TestClient, settings: Settings) -> None:
+    loans = [lend(librarian, settings, f"Book {index}") for index in range(3)]
+
+    page = librarian.get("/api/loans", params={"limit": 1, "offset": 1}).json()
+
+    assert [loan["id"] for loan in page["items"]] == [loans[1]["id"]]
+    assert page["total"] == 3
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+def test_active_loans_reject_out_of_range_paging(
+    librarian: TestClient, params: dict[str, int]
+) -> None:
+    assert librarian.get("/api/loans", params=params).status_code == 422
+
+
+LOAN_ACTIONS = [("GET", "/api/loans"), ("POST", "/api/loans/1/return")]
+
+
+@pytest.mark.parametrize(("method", "path"), LOAN_ACTIONS)
+def test_loan_actions_are_401_when_signed_out(client: TestClient, method: str, path: str) -> None:
+    assert client.request(method, path).status_code == 401
+
+
+@pytest.mark.parametrize(("method", "path"), LOAN_ACTIONS)
+def test_loan_actions_are_403_for_a_member(
+    client: TestClient, settings: Settings, method: str, path: str
+) -> None:
+    sign_in_as(client, settings, Role.MEMBER)
+
+    assert client.request(method, path).status_code == 403

@@ -13,11 +13,16 @@ export interface Loan {
   returned_at: string | null;
 }
 
-/** The server's page-size cap; the picker lists at most this many books. */
-export const BOOK_PICKER_LIMIT = 100;
+export interface LoanPage {
+  items: Loan[];
+  total: number;
+}
+
+/** The server's page-size cap; lists on the lending page show at most this many. */
+export const LENDING_LIST_LIMIT = 100;
 
 export async function fetchBookChoices(): Promise<BookPage> {
-  return getJson<BookPage>(`/api/books?limit=${BOOK_PICKER_LIMIT}`);
+  return getJson<BookPage>(`/api/books?limit=${LENDING_LIST_LIMIT}`);
 }
 
 export async function checkOut(bookId: number, borrowerEmail: string): Promise<Loan> {
@@ -26,5 +31,15 @@ export async function checkOut(bookId: number, borrowerEmail: string): Promise<L
     jsonBody('POST', { book_id: bookId, borrower_email: borrowerEmail }),
     'Checkout failed.',
   );
+  return res.json();
+}
+
+/** Loans not yet returned, soonest due first. */
+export async function fetchActiveLoans(): Promise<LoanPage> {
+  return getJson<LoanPage>(`/api/loans?limit=${LENDING_LIST_LIMIT}`);
+}
+
+export async function checkIn(loanId: number): Promise<Loan> {
+  const res = await send(`/api/loans/${loanId}/return`, { method: 'POST' }, 'Check-in failed.');
   return res.json();
 }

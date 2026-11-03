@@ -177,3 +177,18 @@
   gap: 16px;
   margin-top: 16px;
 }
+
+/* A form on a wide page keeps the same width as forms on narrow pages. */
+.page.wide form.narrow {
+  max-width: 380px;
+}
+
+/* Hidden on screen but still read by screen readers. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

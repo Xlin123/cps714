@@ -2,16 +2,14 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.database import Database
 from lms.models import Book, Loan
-
-PAGE_SIZE_DEFAULT = 50
-PAGE_SIZE_MAX = 100
+from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 
 
 class BookRead(BaseModel):
@@ -97,8 +95,8 @@ def catalog_router(database: Database) -> APIRouter:
     @router.get("", response_model=BookPage)
     async def browse(
         session: Annotated[AsyncSession, Depends(database.session)],
-        limit: Annotated[int, Query(ge=1, le=PAGE_SIZE_MAX)] = PAGE_SIZE_DEFAULT,
-        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Limit = PAGE_SIZE_DEFAULT,
+        offset: Offset = 0,
     ) -> BookPage:
         return await list_books(session, limit=limit, offset=offset)
 

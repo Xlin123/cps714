@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
-import { useSubmit } from './useSubmit';
+import { useSubmit } from '../hooks/useSubmit';
 
 export function RegisterPage() {
   const { register } = useAuth();

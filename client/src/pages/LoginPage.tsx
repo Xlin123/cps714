@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { DemoAccountButtons } from './DemoAccountButtons';
-import { useSubmit } from './useSubmit';
+import { useSubmit } from '../hooks/useSubmit';
 
 export function LoginPage() {
   const { login } = useAuth();

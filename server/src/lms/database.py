@@ -1,7 +1,9 @@
 """Database engine and session lifetime."""
 
 from collections.abc import AsyncIterator
+from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from lms.models import Base
@@ -20,6 +22,8 @@ class Database:
 
     def __init__(self, url: str) -> None:
         self._engine = create_async_engine(url)
+        if self._engine.dialect.name == "sqlite":
+            event.listen(self._engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
         self.session_maker = async_sessionmaker(self._engine, expire_on_commit=False)
 
     async def create_tables(self) -> None:
@@ -35,3 +39,10 @@ class Database:
     async def dispose(self) -> None:
         """Close every pooled connection."""
         await self._engine.dispose()
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection: Any, _: Any) -> None:
+    # SQLite ignores FOREIGN KEY constraints unless this is set on every connection.
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()

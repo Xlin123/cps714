@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { AuthError } from '../auth/api';
+import { ApiError } from '../api/http';
 
 /** Runs a form action, exposing a user-facing error and an in-flight flag. */
 export function useSubmit(action: () => Promise<void>) {
@@ -14,7 +14,7 @@ export function useSubmit(action: () => Promise<void>) {
     try {
       await action();
     } catch (err) {
-      if (!(err instanceof AuthError)) throw err;
+      if (!(err instanceof ApiError)) throw err;
       setError(err.message);
     } finally {
       setSubmitting(false);

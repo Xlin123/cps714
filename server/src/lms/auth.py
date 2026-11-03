@@ -63,8 +63,10 @@ class Auth:
 
         auth = Auth(database, settings)
 
-        @app.get("/books/new")
-        async def new_book(user: User = Depends(auth.require_role(Role.LIBRARIAN))): ...
+        staff = auth.require_capability(Capability.VIEW_STAFF_AREA)
+
+        @router.get("/api/staff/area")
+        async def staff_area(user: Annotated[User, Depends(staff)]) -> ...: ...
     """
 
     def __init__(self, database: Database, settings: Settings) -> None:

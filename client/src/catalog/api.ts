@@ -1,3 +1,5 @@
+import { getJson } from '../api/http';
+
 export interface Book {
   id: number;
   title: string;
@@ -19,7 +21,5 @@ export const PAGE_SIZE = 50;
 
 export async function fetchBooks(offset: number): Promise<BookPage> {
   const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
-  const res = await fetch(`/api/books?${params}`);
-  if (!res.ok) throw new Error(`GET /api/books failed with ${res.status}`);
-  return res.json();
+  return getJson<BookPage>(`/api/books?${params}`);
 }

@@ -1,15 +1,28 @@
-"""Public catalog browsing."""
+"""Public catalog browsing and staff catalog management."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from lms.auth import Auth
 from lms.database import Database
-from lms.models import Book, Loan
+from lms.models import (
+    AUTHOR_MAX_LENGTH,
+    CATEGORY_MAX_LENGTH,
+    ISBN_MAX_LENGTH,
+    TITLE_MAX_LENGTH,
+    Book,
+    Loan,
+    User,
+)
 from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
+from lms.permissions import Capability
+
+DUPLICATE_ISBN = "CATALOG_DUPLICATE_ISBN"
 
 
 class BookRead(BaseModel):
@@ -30,6 +43,18 @@ class BookPage(BaseModel):
 
     items: list[BookRead]
     total: int
+
+
+class BookCreate(BaseModel):
+    """The fields a librarian supplies when adding a book."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=TITLE_MAX_LENGTH)
+    author: str = Field(min_length=1, max_length=AUTHOR_MAX_LENGTH)
+    isbn: str = Field(min_length=1, max_length=ISBN_MAX_LENGTH)
+    category: str = Field(min_length=1, max_length=CATEGORY_MAX_LENGTH)
+    total_copies: int = Field(ge=0)
 
 
 def available_copies(book: Book, active_loans: int) -> int:
@@ -83,14 +108,15 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
     )
 
 
-def catalog_router(database: Database) -> APIRouter:
-    """Router for ``GET /api/books``. Open to everyone, guests included.
+def catalog_router(database: Database, auth: Auth) -> APIRouter:
+    """Router for browsing and creating catalog entries.
 
     Example::
 
-        app.include_router(catalog_router(database))
+        app.include_router(catalog_router(database, auth))
     """
     router = APIRouter(prefix="/api/books", tags=["catalog"])
+    manage_catalog = auth.require_capability(Capability.MANAGE_CATALOG)
 
     @router.get("", response_model=BookPage)
     async def browse(
@@ -99,5 +125,24 @@ def catalog_router(database: Database) -> APIRouter:
         offset: Offset = 0,
     ) -> BookPage:
         return await list_books(session, limit=limit, offset=offset)
+
+    @router.post("", response_model=BookRead, status_code=status.HTTP_201_CREATED)
+    async def create(
+        payload: BookCreate,
+        session: Annotated[AsyncSession, Depends(database.session)],
+        _: Annotated[User, Depends(manage_catalog)],
+    ) -> BookRead:
+        book = Book(**payload.model_dump())
+        session.add(book)
+        try:
+            await session.commit()
+        except IntegrityError as error:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=DUPLICATE_ISBN,
+            ) from error
+        await session.refresh(book)
+        return to_book_read(book, active_loans=0)
 
     return router

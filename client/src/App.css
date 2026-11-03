@@ -18,6 +18,18 @@
   overflow-wrap: anywhere;
 }
 
+.page-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-heading h1 {
+  margin: 0;
+}
+
 .page form {
   display: flex;
   flex-direction: column;
@@ -52,6 +64,21 @@
 
 .page .error {
   color: #c0392b;
+}
+
+.page .success {
+  color: #18794e;
+}
+
+.add-book {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  scroll-margin-top: 24px;
+}
+
+.add-book h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
 }
 
 .button,

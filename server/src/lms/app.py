@@ -36,7 +36,8 @@ class SpaStaticFiles(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except HTTPException as error:
-            if error.status_code != 404 or path.startswith("api/"):
+            request_path = scope.get("path", "").lstrip("/")
+            if error.status_code != 404 or request_path.startswith("api/"):
                 raise
             return await super().get_response("index.html", scope)
 
@@ -89,7 +90,7 @@ def create_app(
     app.include_router(_auth_router(auth))
     # Each feature router takes only what it needs; add new features here.
     for feature_router in (
-        catalog_router(database),
+        catalog_router(database, auth),
         loans_router(database, auth, loan_period=loan_period),
         staff_router(database, auth),
     ):

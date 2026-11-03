@@ -21,13 +21,20 @@ class Capability(StrEnum):
 
     LEND_BOOKS = "lend_books"
     MANAGE_STAFF = "manage_staff"
+    MANAGE_CATALOG = "manage_catalog"
 
 
 ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
     {
         Role.MEMBER: frozenset(),
-        Role.LIBRARIAN: frozenset({Capability.LEND_BOOKS}),
-        Role.ADMIN: frozenset({Capability.LEND_BOOKS, Capability.MANAGE_STAFF}),
+        Role.LIBRARIAN: frozenset({Capability.LEND_BOOKS, Capability.MANAGE_CATALOG}),
+        Role.ADMIN: frozenset(
+            {
+                Capability.LEND_BOOKS,
+                Capability.MANAGE_STAFF,
+                Capability.MANAGE_CATALOG,
+            }
+        ),
     }
 )
 

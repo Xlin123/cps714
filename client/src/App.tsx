@@ -2,11 +2,11 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { Capability } from './auth/api';
 import { useAuth } from './auth/useAuth';
-import { AreaPage } from './areas/AreaPage';
 import { CatalogPage } from './catalog/CatalogPage';
 import { LendingPage } from './lending/LendingPage';
 import { NavBar } from './components/NavBar';
 import { LoginPage } from './pages/LoginPage';
+import { StaffPage } from './staff/StaffPage';
 import { RegisterPage } from './pages/RegisterPage';
 import './App.css';
 
@@ -84,8 +84,8 @@ function App() {
         <Route
           path="/admin"
           element={
-            <RequireCapability capability="view_admin_area">
-              <AreaPage area="admin" />
+            <RequireCapability capability="manage_staff">
+              <StaffPage />
             </RequireCapability>
           }
         />

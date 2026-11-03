@@ -12,7 +12,6 @@ from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
-from lms.areas import areas_router
 from lms.auth import Auth
 from lms.catalog import catalog_router
 from lms.database import Database
@@ -21,6 +20,7 @@ from lms.loans import loans_router
 from lms.models import User
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
+from lms.staff import staff_router
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +90,8 @@ def create_app(
     # Each feature router takes only what it needs; add new features here.
     for feature_router in (
         catalog_router(database),
-        areas_router(auth),
         loans_router(database, auth, loan_period=loan_period),
+        staff_router(database, auth),
     ):
         app.include_router(feature_router)
     if is_demo_data_enabled:

@@ -63,10 +63,10 @@ class Auth:
 
         auth = Auth(database, settings)
 
-        staff = auth.require_capability(Capability.VIEW_STAFF_AREA)
+        lend = auth.require_capability(Capability.LEND_BOOKS)
 
-        @router.get("/api/staff/area")
-        async def staff_area(user: Annotated[User, Depends(staff)]) -> ...: ...
+        @router.get("/api/loans")
+        async def active_loans(user: Annotated[User, Depends(lend)]) -> ...: ...
     """
 
     def __init__(self, database: Database, settings: Settings) -> None:
@@ -127,6 +127,6 @@ class Auth:
 
         Example::
 
-            staff = auth.require_capability(Capability.VIEW_STAFF_AREA)
+            lend = auth.require_capability(Capability.LEND_BOOKS)
         """
         return self.require_role(*roles_with(capability))

@@ -14,6 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   LOAN_ALREADY_BORROWED: 'That member already has this book on loan.',
   LOAN_NOT_FOUND: 'That loan no longer exists.',
   LOAN_ALREADY_RETURNED: 'That loan has already been checked in.',
+  STAFF_NOT_FOUND: 'That librarian account no longer exists.',
 };
 
 async function errorFrom(res: Response, fallback: string): Promise<ApiError> {

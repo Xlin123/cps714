@@ -16,21 +16,18 @@ class Capability(StrEnum):
 
     Example::
 
-        if Capability.VIEW_ADMIN_AREA in capabilities_for(user.role): ...
+        if Capability.MANAGE_STAFF in capabilities_for(user.role): ...
     """
 
-    VIEW_STAFF_AREA = "view_staff_area"
-    VIEW_ADMIN_AREA = "view_admin_area"
     LEND_BOOKS = "lend_books"
+    MANAGE_STAFF = "manage_staff"
 
 
 ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
     {
         Role.MEMBER: frozenset(),
-        Role.LIBRARIAN: frozenset({Capability.VIEW_STAFF_AREA, Capability.LEND_BOOKS}),
-        Role.ADMIN: frozenset(
-            {Capability.VIEW_STAFF_AREA, Capability.VIEW_ADMIN_AREA, Capability.LEND_BOOKS}
-        ),
+        Role.LIBRARIAN: frozenset({Capability.LEND_BOOKS}),
+        Role.ADMIN: frozenset({Capability.LEND_BOOKS, Capability.MANAGE_STAFF}),
     }
 )
 
@@ -40,7 +37,7 @@ def capabilities_for(role: Role) -> frozenset[Capability]:
 
     Example::
 
-        capabilities_for(Role.LIBRARIAN)  # {VIEW_STAFF_AREA, LEND_BOOKS}
+        capabilities_for(Role.LIBRARIAN)  # frozenset({Capability.LEND_BOOKS})
     """
     return ROLE_CAPABILITIES[role]
 
@@ -50,6 +47,6 @@ def roles_with(capability: Capability) -> frozenset[Role]:
 
     Example::
 
-        roles_with(Capability.VIEW_ADMIN_AREA)  # frozenset({Role.ADMIN})
+        roles_with(Capability.MANAGE_STAFF)  # frozenset({Role.ADMIN})
     """
     return frozenset(role for role, held in ROLE_CAPABILITIES.items() if capability in held)

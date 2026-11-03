@@ -2,14 +2,14 @@
 
 See `docs/REQUIREMENTS.md` for the full product backlog and `docs/management/` for Sprint management docs (team roles, communication plan, risk register, meeting minutes).
 
-Stack: FastAPI (Python 3.12, managed with [uv](https://docs.astral.sh/uv/)) backend, React + TypeScript (Vite) frontend, SQLite for storage. Accounts and sessions are handled by [fastapi-users](https://fastapi-users.github.io/fastapi-users/). Design decisions are recorded per feature in `docs/<feature>/decisions.md` (`auth`, `catalog`, `borrowing`).
+Stack: FastAPI (Python 3.12, managed with [uv](https://docs.astral.sh/uv/)) backend, React + TypeScript (Vite) frontend, SQLite for storage. Accounts and sessions are handled by [fastapi-users](https://fastapi-users.github.io/fastapi-users/). Design decisions are recorded per feature in `docs/<feature>/decisions.md` (`auth`, `catalog`, `borrowing`, `staff-accounts`).
 
 ## How auth works
 
 - Email + password login. Passwords are hashed with argon2 (via fastapi-users).
 - On login the server sets an `HttpOnly`, `SameSite=Lax` cookie (`lms_session`) holding an opaque token stored server-side; logging out deletes the token, so the cookie stops working immediately.
 - Every account has one role: `member`, `librarian` or `admin`.
-- Visitors can self-register, and always get `member`. Librarian and admin accounts are created with the `lms create-user` command (below).
+- Visitors can self-register, and always get `member`. Admins create librarian accounts on the Staff accounts page (below). Admin accounts are created only with the `lms create-user` command.
 
 | Method | Path                  | Body                                    | Result                        |
 |--------|-----------------------|-----------------------------------------|-------------------------------|
@@ -25,13 +25,18 @@ What each role may do lives in one place, `server/src/lms/permissions.py` (`ROLE
 Protecting an endpoint:
 
 ```python
-staff = auth.require_capability(Capability.VIEW_STAFF_AREA)
+lend = auth.require_capability(Capability.LEND_BOOKS)
 
-@router.get("/api/staff/area")
-async def staff_area(user: Annotated[User, Depends(staff)]) -> ...: ...
+@router.get("/api/loans")
+async def active_loans(user: Annotated[User, Depends(lend)]) -> ...: ...
 ```
 
-Signed-out callers get 401; signed-in callers whose role lacks the capability get 403. `/admin` (admin) is a placeholder page backed by `GET /api/admin/area`; `GET /api/staff/area` remains as a placeholder endpoint.
+Signed-out callers get 401; signed-in callers whose role lacks the capability get 403.
+
+| Capability     | Roles            | Pages and endpoints                  |
+|----------------|------------------|--------------------------------------|
+| `lend_books`   | librarian, admin | `/staff` (Lending), `/api/loans`     |
+| `manage_staff` | admin            | `/admin` (Staff accounts), `/api/staff` |
 
 ## Catalog
 
@@ -41,7 +46,7 @@ Every list endpoint pages the same way (`server/src/lms/paging.py`).
 
 ## Lending
 
-Requires `lend_books` (librarian, admin). The Lending page (`/staff`) checks books out and back in.
+Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 
 | Method | Path                       | Body                               | Result |
 |--------|----------------------------|------------------------------------|--------|
@@ -50,6 +55,25 @@ Requires `lend_books` (librarian, admin). The Lending page (`/staff`) checks boo
 | POST   | `/api/loans/{id}/return`   | —                                  | 200 with the returned loan |
 
 The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+
+## Staff accounts
+
+Requires `manage_staff` (admin). The Staff accounts page (`/admin`) creates librarians and deactivates or reactivates them.
+
+| Method | Path                     | Body                          | Result |
+|--------|--------------------------|-------------------------------|--------|
+| POST   | `/api/staff`             | JSON `{email, name, password}` | 201 with the new librarian; there is no `role` field |
+| GET    | `/api/staff?limit&offset` | —                            | librarian accounts |
+| PATCH  | `/api/staff/{id}`        | JSON `{is_active}`            | 200; deactivating signs them out at once |
+
+Only librarian accounts can be changed (`STAFF_NOT_FOUND` otherwise). See `docs/staff-accounts/decisions.md`.
+
+## Adding a feature
+
+- Server: a module in `server/src/lms/` with its schemas, logic and a router factory that takes only what it needs; add the router to the list in `create_app` (`app.py`). Guard endpoints with a capability from `permissions.py`, and add the new capability to `ENDPOINT_FOR` and `EXPECTED` in `tests/test_permissions.py`.
+- Refusals: raise a stable code as `detail`, and add its user-facing text to `ERROR_MESSAGES` in `client/src/api/http.ts`.
+- Client: a folder in `client/src/<feature>/` with an `api.ts` built on `getJson`/`send` from `api/http.ts`, pages using `useLoad` for data and `useSubmit` (or `components/ActionButton`) for actions. Mirror new capabilities in `client/src/auth/api.ts`.
+- Tables: new tables are created at startup. Changing an existing table needs a database reset (delete `lms.sqlite3`) until there is a migration tool.
 
 ## Local development
 

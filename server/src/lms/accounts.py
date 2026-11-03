@@ -1,4 +1,9 @@
-"""Privileged account creation, for operator tools only (never an HTTP route)."""
+"""Privileged account creation.
+
+``AccountCreate`` carries a role, so it is never parsed from an HTTP request.
+The CLI builds it for any role; ``lms.staff`` builds it with the role fixed to
+librarian.
+"""
 
 from fastapi_users import schemas as user_schemas
 from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase

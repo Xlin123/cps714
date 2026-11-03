@@ -8,19 +8,17 @@ from tests.conftest import login, seed_account
 
 # docs/REQUIREMENTS.md §3, written out independently of ROLE_CAPABILITIES.
 EXPECTED = {
-    (Role.MEMBER, Capability.VIEW_STAFF_AREA): False,
-    (Role.MEMBER, Capability.VIEW_ADMIN_AREA): False,
-    (Role.LIBRARIAN, Capability.VIEW_STAFF_AREA): True,
-    (Role.LIBRARIAN, Capability.VIEW_ADMIN_AREA): False,
-    (Role.ADMIN, Capability.VIEW_STAFF_AREA): True,
-    (Role.ADMIN, Capability.VIEW_ADMIN_AREA): True,
     (Role.MEMBER, Capability.LEND_BOOKS): False,
     (Role.LIBRARIAN, Capability.LEND_BOOKS): True,
     (Role.ADMIN, Capability.LEND_BOOKS): True,
+    (Role.MEMBER, Capability.MANAGE_STAFF): False,
+    (Role.LIBRARIAN, Capability.MANAGE_STAFF): False,
+    (Role.ADMIN, Capability.MANAGE_STAFF): True,
 }
-AREA_FOR = {
-    Capability.VIEW_STAFF_AREA: "/api/staff/area",
-    Capability.VIEW_ADMIN_AREA: "/api/admin/area",
+# A read-only endpoint guarded by each capability, to check enforcement per role.
+ENDPOINT_FOR = {
+    Capability.LEND_BOOKS: "/api/loans",
+    Capability.MANAGE_STAFF: "/api/staff",
 }
 
 
@@ -34,19 +32,23 @@ def test_capability_map_matches_requirements(role: Role, capability: Capability)
     assert (role in roles_with(capability)) is EXPECTED[role, capability]
 
 
-@pytest.mark.parametrize("path", sorted(AREA_FOR.values()))
-def test_areas_are_401_when_signed_out(client: TestClient, path: str) -> None:
+def test_every_capability_has_an_endpoint_to_check() -> None:
+    assert set(ENDPOINT_FOR) == set(Capability)
+
+
+@pytest.mark.parametrize("path", sorted(ENDPOINT_FOR.values()))
+def test_guarded_endpoints_are_401_when_signed_out(client: TestClient, path: str) -> None:
     assert client.get(path).status_code == 401
 
 
-@pytest.mark.parametrize(("role", "capability"), [pair for pair in EXPECTED if pair[1] in AREA_FOR])
-def test_area_endpoints_enforce_each_role(
+@pytest.mark.parametrize(("role", "capability"), list(EXPECTED))
+def test_guarded_endpoints_enforce_each_role(
     client: TestClient, settings: Settings, role: Role, capability: Capability
 ) -> None:
     seed_account(settings, f"{role.value}@example.com", role)
     login(client, f"{role.value}@example.com")
 
-    response = client.get(AREA_FOR[capability])
+    response = client.get(ENDPOINT_FOR[capability])
 
     assert response.status_code == (200 if EXPECTED[role, capability] else 403)
 

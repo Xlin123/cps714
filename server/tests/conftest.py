@@ -58,6 +58,15 @@ def login(client: TestClient, email: str, password: str = PASSWORD) -> int:
     return response.status_code
 
 
+def sign_in_as(client: TestClient, settings: Settings, role: Role) -> str:
+    """Seed an account with ``role``, log ``client`` in as it, and return its email."""
+    email = f"{role.value}@example.com"
+    seed_account(settings, email, role)
+    status = login(client, email)
+    assert status == 204, f"login as {email} failed with {status}"
+    return email
+
+
 def add_books(settings: Settings, books: list[Book]) -> None:
     async def run() -> None:
         database = Database(settings.db_url)

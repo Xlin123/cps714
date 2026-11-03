@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useLoad } from '../hooks/useLoad';
 import { fetchBooks, PAGE_SIZE } from './api';
-import type { Book, BookPage } from './api';
+import type { Book } from './api';
 
 function availability(book: Book): string {
   if (!book.is_available) return 'Unavailable';
@@ -9,26 +10,14 @@ function availability(book: Book): string {
 
 export function CatalogPage() {
   const [offset, setOffset] = useState(0);
-  const [page, setPage] = useState<BookPage | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { state } = useLoad(() => fetchBooks(offset), [offset]);
 
-  useEffect(() => {
-    let isCancelled = false;
-    fetchBooks(offset)
-      .then((found) => {
-        if (!isCancelled) setPage(found);
-      })
-      .catch((err: unknown) => {
-        if (!isCancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      isCancelled = true;
-    };
-  }, [offset]);
+  if (state.status === 'failed') {
+    return <div className="page error">Could not load the catalogue: {state.error}</div>;
+  }
+  if (state.status === 'loading') return <div className="page">Loading…</div>;
 
-  if (error) return <div className="page error">Could not load the catalogue: {error}</div>;
-  if (!page) return <div className="page">Loading…</div>;
-
+  const page = state.data;
   const hasPrevious = offset > 0;
   const hasNext = offset + PAGE_SIZE < page.total;
 

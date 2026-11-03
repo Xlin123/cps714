@@ -1,22 +1,14 @@
-import { useEffect, useState } from 'react';
 import { fetchDemoAccounts } from '../auth/api';
+import { useLoad } from '../hooks/useLoad';
 import type { DemoAccount } from '../auth/api';
 
 /** Renders one fill-in button per demo account; renders nothing when demo is off. */
 export function DemoAccountButtons({ onPick }: { onPick: (account: DemoAccount) => void }) {
-  const [accounts, setAccounts] = useState<DemoAccount[]>([]);
+  const { state } = useLoad(fetchDemoAccounts, []);
 
-  useEffect(() => {
-    let isCancelled = false;
-    fetchDemoAccounts().then((found) => {
-      if (!isCancelled) setAccounts(found);
-    });
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
-
-  if (accounts.length === 0) return null;
+  // The buttons are a convenience; if they can't load, the form still works.
+  if (state.status !== 'loaded' || state.data.length === 0) return null;
+  const accounts = state.data;
   return (
     <div className="demo-accounts">
       <p>Test accounts:</p>

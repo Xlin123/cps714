@@ -1,3 +1,5 @@
+import { jsonBody, send } from '../api/http';
+
 export type Role = 'member' | 'librarian' | 'admin';
 
 /** Mirrors the server's Capability enum; the server decides who holds which. */
@@ -17,24 +19,6 @@ export interface RegisterInput {
   password: string;
 }
 
-/** A request the server refused, with a message safe to show the user. */
-export class AuthError extends Error {}
-
-const ERROR_MESSAGES: Record<string, string> = {
-  LOGIN_BAD_CREDENTIALS: 'Incorrect email or password.',
-  REGISTER_USER_ALREADY_EXISTS: 'An account already exists for this email.',
-};
-
-async function errorFrom(res: Response, fallback: string): Promise<AuthError> {
-  const body = await res.json().catch(() => null);
-  const detail = body?.detail;
-  if (typeof detail === 'string') return new AuthError(ERROR_MESSAGES[detail] ?? fallback);
-  if (detail?.code === 'REGISTER_INVALID_PASSWORD' && typeof detail.reason === 'string') {
-    return new AuthError(detail.reason);
-  }
-  return new AuthError(fallback);
-}
-
 /** Returns the signed-in user, or null when there is no valid session. */
 export async function fetchMe(): Promise<SessionUser | null> {
   const res = await fetch('/api/auth/me');
@@ -45,20 +29,15 @@ export async function fetchMe(): Promise<SessionUser | null> {
 
 export async function login(email: string, password: string): Promise<void> {
   // fastapi-users follows the OAuth2 password form: field names are fixed.
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    body: new URLSearchParams({ username: email, password }),
-  });
-  if (!res.ok) throw await errorFrom(res, 'Login failed.');
+  await send(
+    '/api/auth/login',
+    { method: 'POST', body: new URLSearchParams({ username: email, password }) },
+    'Login failed.',
+  );
 }
 
 export async function register(input: RegisterInput): Promise<void> {
-  const res = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) throw await errorFrom(res, 'Registration failed.');
+  await send('/api/auth/register', jsonBody('POST', input), 'Registration failed.');
 }
 
 export async function logout(): Promise<void> {

@@ -82,3 +82,17 @@ aren't allowed, verified for each role. No staff or admin feature exists yet.
 **Consequences.** Later stories add a capability, grant it in the map, and
 guard their endpoints with it. The client's guard is a convenience; the
 server's is the enforcement.
+
+## 2026-11-02: Placeholder areas retired
+
+**Context.** The `/staff` and `/admin` placeholders from LMS-3 now have real
+pages: lending (#9, #10) and staff accounts (#12).
+
+**Decision.** `GET /api/staff/area`, `GET /api/admin/area` and the
+`VIEW_STAFF_AREA`/`VIEW_ADMIN_AREA` capabilities are removed. Pages and nav
+links are gated on the capability their actions need (`LEND_BOOKS`,
+`MANAGE_STAFF`). The per-role enforcement tests now run against
+`/api/loans` and `/api/staff`.
+
+**Consequences.** Admins can also create librarians over HTTP; see
+`docs/staff-accounts/decisions.md`.

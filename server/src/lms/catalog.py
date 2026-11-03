@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi_users_db_sqlalchemy.generics import now_utc
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,8 @@ from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 from lms.permissions import Capability
 
 DUPLICATE_ISBN = "CATALOG_DUPLICATE_ISBN"
+BOOK_NOT_FOUND = "CATALOG_BOOK_NOT_FOUND"
+BOOK_ON_LOAN = "CATALOG_BOOK_ON_LOAN"
 
 
 class BookRead(BaseModel):
@@ -88,7 +91,8 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
 
         page = await list_books(session, limit=50, offset=0)
     """
-    total = await session.scalar(select(func.count()).select_from(Book))
+    is_active = Book.retired_at.is_(None)
+    total = await session.scalar(select(func.count()).select_from(Book).where(is_active))
     active = (
         select(Loan.book_id, func.count().label("count"))
         .where(Loan.returned_at.is_(None))
@@ -98,6 +102,7 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
     rows = await session.execute(
         select(Book, func.coalesce(active.c.count, 0))
         .outerjoin(active, active.c.book_id == Book.id)
+        .where(is_active)
         .order_by(Book.title, Book.id)
         .limit(limit)
         .offset(offset)
@@ -144,5 +149,36 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
             ) from error
         await session.refresh(book)
         return to_book_read(book, active_loans=0)
+
+    @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def retire(
+        book_id: int,
+        session: Annotated[AsyncSession, Depends(database.session)],
+        _: Annotated[User, Depends(manage_catalog)],
+    ) -> Response:
+        has_active_loan = exists().where(
+            Loan.book_id == book_id,
+            Loan.returned_at.is_(None),
+        )
+        result = await session.execute(
+            update(Book)
+            .where(
+                Book.id == book_id,
+                Book.retired_at.is_(None),
+                ~has_active_loan,
+            )
+            .values(retired_at=now_utc())
+            .execution_options(synchronize_session=False)
+        )
+        await session.commit()
+        if result.rowcount == 1:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+        book = await session.get(Book, book_id)
+        if book is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=BOOK_NOT_FOUND)
+        if book.retired_at is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=BOOK_ON_LOAN)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     return router

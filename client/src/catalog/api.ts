@@ -41,3 +41,8 @@ export async function createBook(input: BookInput): Promise<Book> {
   );
   return res.json();
 }
+
+/** Removes a book from the active catalog while preserving loan history. */
+export async function deleteBook(bookId: number): Promise<void> {
+  await send(`/api/books/${bookId}`, { method: 'DELETE' }, 'Could not remove the book.');
+}

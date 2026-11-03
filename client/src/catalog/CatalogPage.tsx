@@ -4,6 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { useLoad } from '../hooks/useLoad';
 import { fetchBooks, PAGE_SIZE } from './api';
 import type { Book } from './api';
+import { RemoveBookButton } from './RemoveBookButton';
 
 function availability(book: Book): string {
   if (!book.is_available) return 'Unavailable';
@@ -13,7 +14,7 @@ function availability(book: Book): string {
 export function CatalogPage() {
   const { user } = useAuth();
   const [offset, setOffset] = useState(0);
-  const { state } = useLoad(() => fetchBooks(offset), [offset]);
+  const { state, reload } = useLoad(() => fetchBooks(offset), [offset]);
 
   if (state.status === 'failed') {
     return <div className="page error">Could not load the catalogue: {state.error}</div>;
@@ -21,6 +22,7 @@ export function CatalogPage() {
   if (state.status === 'loading') return <div className="page">Loading…</div>;
 
   const page = state.data;
+  const canManageCatalog = user?.capabilities.includes('manage_catalog') ?? false;
   const hasPrevious = offset > 0;
   const hasNext = offset + PAGE_SIZE < page.total;
 
@@ -28,7 +30,7 @@ export function CatalogPage() {
     <div className="page wide">
       <div className="page-heading">
         <h1>Catalogue</h1>
-        {user?.capabilities.includes('manage_catalog') && (
+        {canManageCatalog && (
           <Link className="button" to="/staff#add-book">
             Add book
           </Link>
@@ -48,6 +50,11 @@ export function CatalogPage() {
                     Category
                   </th>
                   <th scope="col">Availability</th>
+                  {canManageCatalog && (
+                    <th scope="col" className="action-column">
+                      <span className="visually-hidden">Action</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -59,6 +66,21 @@ export function CatalogPage() {
                     <td className={book.is_available ? undefined : 'unavailable'}>
                       {availability(book)}
                     </td>
+                    {canManageCatalog && (
+                      <td>
+                        <RemoveBookButton
+                          bookId={book.id}
+                          title={book.title}
+                          onRemoved={() => {
+                            if (page.items.length === 1 && offset > 0) {
+                              setOffset(offset - PAGE_SIZE);
+                            } else {
+                              reload();
+                            }
+                          }}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

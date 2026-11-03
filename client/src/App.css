@@ -197,6 +197,41 @@
   color: #c0392b;
 }
 
+.catalog .inline-action {
+  display: block;
+}
+
+.catalog .inline-action button {
+  margin-top: 0;
+}
+
+.catalog button.danger {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  color: var(--text);
+  background: transparent;
+  border-color: transparent;
+}
+
+.catalog button.danger:hover:not(:disabled),
+.catalog button.danger:focus-visible {
+  color: #c0392b;
+  background: rgba(192, 57, 43, 0.1);
+  border-color: rgba(192, 57, 43, 0.35);
+}
+
+.catalog button.danger:focus-visible {
+  outline: 2px solid #c0392b;
+  outline-offset: 2px;
+}
+
+.catalog .action-column {
+  width: 34px;
+}
+
 .pager {
   display: flex;
   align-items: center;

@@ -145,7 +145,11 @@ async def check_out(
         literal(librarian_id, GUID),
         literal(now, timestamp),
         literal(now + loan_period, timestamp),
-    ).where(Book.id == book_id, _active_loan_count(Book.id) < Book.total_copies)
+    ).where(
+        Book.id == book_id,
+        Book.retired_at.is_(None),
+        _active_loan_count(Book.id) < Book.total_copies,
+    )
     statement = (
         insert(Loan)
         .from_select(
@@ -174,7 +178,8 @@ async def check_out(
     # borrower's own loan first so "you already have it" wins over "none left".
     if await _has_active_loan(session, book_id, borrower_id):
         raise LoanRefused(LoanRefusal.ALREADY_BORROWED)
-    if await session.get(Book, book_id) is None:
+    book = await session.get(Book, book_id)
+    if book is None or book.retired_at is not None:
         raise LoanRefused(LoanRefusal.BOOK_NOT_FOUND)
     raise LoanRefused(LoanRefusal.NO_COPIES_AVAILABLE)
 

@@ -29,3 +29,21 @@ harmless. The sample ISBNs are not checked against real editions.
 
 `available_copies` is now `total_copies` minus active loans; see
 `docs/borrowing/decisions.md`.
+
+## 2026-11-03: Removing books without losing loan history
+
+**Context.** A `loan` row references its `book` row, so physically deleting a
+book that has ever circulated would either violate the foreign key or erase
+the context needed by borrowing history.
+
+**Decision.** `DELETE /api/books/{id}` is a soft delete. It sets
+`book.retired_at` instead of deleting the row. Catalog queries exclude retired
+books, and checkout excludes them as well. A book with an active loan cannot be
+retired until every copy has been checked in. Removing an already retired book
+is idempotent. A retired ISBN remains reserved to avoid conflating it with a
+new catalog record.
+
+**Consequences.** Existing loan history remains readable. Startup applies a
+small additive schema migration to add `retired_at` to existing databases.
+Restoring a retired title or reusing its ISBN will require a later explicit
+catalog operation.

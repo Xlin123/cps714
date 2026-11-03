@@ -47,6 +47,11 @@ Every list endpoint pages the same way (`server/src/lms/paging.py`).
 
 Librarians and admins can add a book from the Lending page or with `POST /api/books`. Send JSON containing `title`, `author`, `isbn`, `category`, and `total_copies`. Duplicate ISBNs are rejected, and new books immediately appear in the public catalog.
 
+Catalog managers can remove a book with `DELETE /api/books/{id}`. Removal is a
+soft delete: the book disappears from browsing and cannot be checked out, while
+its loan history remains intact. A book with active loans must be checked in
+first. Retired ISBNs remain reserved.
+
 ## Lending
 
 Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
@@ -76,7 +81,9 @@ Only librarian accounts can be changed (`STAFF_NOT_FOUND` otherwise). See `docs/
 - Server: a module in `server/src/lms/` with its schemas, logic and a router factory that takes only what it needs; add the router to the list in `create_app` (`app.py`). Guard endpoints with a capability from `permissions.py`, and add the new capability to `GUARDED_REQUEST_FOR` and `EXPECTED` in `tests/test_permissions.py`.
 - Refusals: raise a stable code as `detail`, and add its user-facing text to `ERROR_MESSAGES` in `client/src/api/http.ts`.
 - Client: a folder in `client/src/<feature>/` with an `api.ts` built on `getJson`/`send` from `api/http.ts`, pages using `useLoad` for data and `useSubmit` (or `components/ActionButton`) for actions. Mirror new capabilities in `client/src/auth/api.ts`.
-- Tables: new tables are created at startup. Changing an existing table needs a database reset (delete `lms.sqlite3`) until there is a migration tool.
+- Tables: new tables are created at startup. The startup schema step also adds the
+  book retirement column to existing databases. Other changes to existing
+  tables still need a migration or database reset.
 
 ## Local development
 

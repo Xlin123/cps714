@@ -42,7 +42,11 @@ class AccessToken(SQLAlchemyBaseAccessTokenTableUUID, Base):
 
 
 class Book(Base):
-    """A catalog entry. ``total_copies`` counts every copy the library owns."""
+    """A catalog entry. ``total_copies`` counts every copy the library owns.
+
+    Retired books stay in storage so historical loans keep their context, but
+    they disappear from browsing and cannot be checked out.
+    """
 
     __tablename__ = "book"
     __table_args__ = (CheckConstraint("total_copies >= 0", name="total_copies_not_negative"),)
@@ -53,6 +57,7 @@ class Book(Base):
     isbn: Mapped[str] = mapped_column(String(ISBN_MAX_LENGTH), nullable=False, unique=True)
     category: Mapped[str] = mapped_column(String(CATEGORY_MAX_LENGTH), nullable=False)
     total_copies: Mapped[int] = mapped_column(Integer, nullable=False)
+    retired_at: Mapped[datetime | None] = mapped_column(TIMESTAMPAware(timezone=True))
 
 
 class Loan(Base):

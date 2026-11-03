@@ -31,9 +31,10 @@ counts copies per book (`total_copies`) but has no table of physical copies.
 **Consequences.**
 
 - SQLite now enforces foreign keys (`PRAGMA foreign_keys=ON` per connection).
-  A book with loan records cannot be deleted; LMS-7 (delete book) must handle
-  that, and editing must not cut `total_copies` below active loans (the
-  catalog clamps availability at zero if it happens).
+  Books are retired rather than physically deleted so loan history remains
+  valid; a book with active loans cannot be retired. Editing must not cut
+  `total_copies` below active loans (the catalog clamps availability at zero
+  if it happens).
 - `GET /api/loans` lists active loans only. Member history (LMS-12, LMS-13)
   can add a filter.
 - The `loan` table is new, so `create_all` adds it to existing databases. A

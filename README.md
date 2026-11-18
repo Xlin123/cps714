@@ -39,6 +39,7 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 | `manage_staff`   | admin            | `/admin` (Staff accounts), `/api/staff` |
 | `manage_catalog` | librarian, admin | `/staff` (Add a book), `/api/books`     |
 | `view_own_loans` | member           | `/history` (My loans), `/api/loans/mine` |
+| `view_members`   | librarian, admin | `/members` (Members), `/api/members`    |
 
 ## Catalog
 
@@ -71,6 +72,18 @@ Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 | GET    | `/api/loans/mine/reminders` | -                                 | the member's overdue and due-soon loans (`LMS_DUE_SOON_DAYS`), soonest due first |
 
 The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+
+## Members
+
+Requires `view_members`. The Members page (`/members`) searches member accounts; each result opens a profile (`/members/{id}`) with the member's details and loan history.
+
+| Method | Path                                    | Query                         | Result |
+|--------|-----------------------------------------|-------------------------------|--------|
+| GET    | `/api/members?q&limit&offset`           | `q`: name or email fragment, case-insensitive, at most 100 characters; empty lists everyone | member accounts (active and deactivated), by name |
+| GET    | `/api/members/{id}`                     | -                             | the member with `active_loans` and `total_loans` |
+| GET    | `/api/members/{id}/loans?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's loans, same shape as `/api/loans/mine` |
+
+Staff accounts are never returned: an unknown id or a staff id gives `MEMBER_NOT_FOUND` (404). See `docs/members/decisions.md`.
 
 ## Staff accounts
 

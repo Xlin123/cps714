@@ -23,18 +23,22 @@ class Capability(StrEnum):
     MANAGE_STAFF = "manage_staff"
     MANAGE_CATALOG = "manage_catalog"
     VIEW_OWN_LOANS = "view_own_loans"
+    VIEW_MEMBERS = "view_members"
 
 
 ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
     {
         # Only members can borrow (see find_borrower), so only they have a history.
         Role.MEMBER: frozenset({Capability.VIEW_OWN_LOANS}),
-        Role.LIBRARIAN: frozenset({Capability.LEND_BOOKS, Capability.MANAGE_CATALOG}),
+        Role.LIBRARIAN: frozenset(
+            {Capability.LEND_BOOKS, Capability.MANAGE_CATALOG, Capability.VIEW_MEMBERS}
+        ),
         Role.ADMIN: frozenset(
             {
                 Capability.LEND_BOOKS,
                 Capability.MANAGE_STAFF,
                 Capability.MANAGE_CATALOG,
+                Capability.VIEW_MEMBERS,
             }
         ),
     }

@@ -22,12 +22,16 @@ EXPECTED = {
     (Role.ADMIN, Capability.MANAGE_CATALOG): True,
     (Role.ADMIN, Capability.MANAGE_STAFF): True,
     (Role.ADMIN, Capability.VIEW_OWN_LOANS): False,
+    (Role.MEMBER, Capability.VIEW_MEMBERS): False,
+    (Role.LIBRARIAN, Capability.VIEW_MEMBERS): True,
+    (Role.ADMIN, Capability.VIEW_MEMBERS): True,
 }
 # One request guarded by each capability, to check enforcement per role.
 GUARDED_REQUEST_FOR = {
     Capability.LEND_BOOKS: ("GET", "/api/loans", None),
     Capability.MANAGE_STAFF: ("GET", "/api/staff", None),
     Capability.VIEW_OWN_LOANS: ("GET", "/api/loans/mine", None),
+    Capability.VIEW_MEMBERS: ("GET", "/api/members", None),
     Capability.MANAGE_CATALOG: (
         "POST",
         "/api/books",

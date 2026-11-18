@@ -393,3 +393,23 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.page form.member-search {
+  margin-bottom: 16px;
+}
+
+.member-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 16px;
+}
+
+.member-details dt {
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.member-details dd {
+  margin: 0;
+}

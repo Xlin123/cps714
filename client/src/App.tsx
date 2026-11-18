@@ -5,6 +5,8 @@ import { useAuth } from './auth/useAuth';
 import { CatalogPage } from './catalog/CatalogPage';
 import { HistoryPage } from './lending/HistoryPage';
 import { LendingPage } from './lending/LendingPage';
+import { MemberProfilePage } from './members/MemberProfilePage';
+import { MembersPage } from './members/MembersPage';
 import { NavBar } from './components/NavBar';
 import { LoginPage } from './pages/LoginPage';
 import { StaffPage } from './staff/StaffPage';
@@ -87,6 +89,22 @@ function App() {
           element={
             <RequireCapability capability="lend_books">
               <LendingPage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/members"
+          element={
+            <RequireCapability capability="view_members">
+              <MembersPage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/members/:id"
+          element={
+            <RequireCapability capability="view_members">
+              <MemberProfilePage />
             </RequireCapability>
           }
         />

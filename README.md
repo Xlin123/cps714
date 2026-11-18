@@ -38,6 +38,7 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 | `lend_books`     | librarian, admin | `/staff` (Lending), `/api/loans`        |
 | `manage_staff`   | admin            | `/admin` (Staff accounts), `/api/staff` |
 | `manage_catalog` | librarian, admin | `/staff` (Add a book), `/api/books`     |
+| `view_own_loans` | member           | `/history` (My loans), `/api/loans/mine` |
 
 ## Catalog
 
@@ -66,6 +67,8 @@ Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 | POST   | `/api/loans`               | JSON `{book_id, borrower_email}`   | 201 with the loan, due `LMS_LOAN_PERIOD_DAYS` from now |
 | GET    | `/api/loans?limit&offset`  | -                                  | active loans, soonest due first |
 | POST   | `/api/loans/{id}/return`   | -                                  | 200 with the returned loan |
+| GET    | `/api/loans/mine?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's own loans, newest first, each with `reminder` |
+| GET    | `/api/loans/mine/reminders` | -                                 | the member's overdue and due-soon loans (`LMS_DUE_SOON_DAYS`), soonest due first |
 
 The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
 

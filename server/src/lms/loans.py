@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from lms.auth import Auth
 from lms.database import Database
 from lms.models import Book, Loan, User
-from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
+from lms.paging import PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, Limit, Offset
 from lms.permissions import Capability
 from lms.roles import Role
 
@@ -72,6 +72,34 @@ class LoanRead(BaseModel):
     returned_at: datetime | None
 
 
+class Reminder(StrEnum):
+    """Why an active loan needs its borrower's attention."""
+
+    OVERDUE = "overdue"
+    DUE_SOON = "due_soon"
+
+
+def reminder_for(
+    *, due_at: datetime, returned_at: datetime | None, now: datetime, due_soon: timedelta
+) -> Reminder | None:
+    """The reminder a loan warrants at ``now``, or None.
+
+    A loan is overdue from the instant it falls due, and due soon from
+    ``due_soon`` before that. Returned loans never need one.
+
+    Example::
+
+        reminder_for(due_at=due, returned_at=None, now=now_utc(), due_soon=timedelta(days=3))
+    """
+    if returned_at is not None:
+        return None
+    if due_at <= now:
+        return Reminder.OVERDUE
+    if due_at <= now + due_soon:
+        return Reminder.DUE_SOON
+    return None
+
+
 class LoanStatus(StrEnum):
     """Which loans a list shows: still out, back, or both."""
 
@@ -84,6 +112,19 @@ class LoanPage(BaseModel):
     """One page of loans. ``total`` counts every match, not just this page."""
 
     items: list[LoanRead]
+    total: int
+
+
+class MemberLoanRead(LoanRead):
+    """A loan as its borrower sees it, with any reminder it warrants."""
+
+    reminder: Reminder | None
+
+
+class MemberLoanPage(BaseModel):
+    """One page of a member's own loans. ``total`` counts every match."""
+
+    items: list[MemberLoanRead]
     total: int
 
 
@@ -264,6 +305,22 @@ async def list_active_loans(session: AsyncSession, *, limit: int, offset: int) -
     return LoanPage(items=[_to_loan_read(*row) for row in rows], total=total or 0)
 
 
+def _to_member_loan_read(
+    loan: Loan,
+    book_title: str,
+    borrower_name: str,
+    borrower_email: str,
+    *,
+    now: datetime,
+    due_soon: timedelta,
+) -> MemberLoanRead:
+    read = _to_loan_read(loan, book_title, borrower_name, borrower_email)
+    reminder = reminder_for(
+        due_at=read.due_at, returned_at=read.returned_at, now=now, due_soon=due_soon
+    )
+    return MemberLoanRead(**read.model_dump(), reminder=reminder)
+
+
 async def list_borrower_loans(
     session: AsyncSession,
     *,
@@ -271,7 +328,9 @@ async def list_borrower_loans(
     status: LoanStatus,
     limit: int,
     offset: int,
-) -> LoanPage:
+    now: datetime,
+    due_soon: timedelta,
+) -> MemberLoanPage:
     """One page of ``borrower_id``'s loans, most recently checked out first.
 
     Loans of books retired since are included, so history stays complete.
@@ -279,7 +338,8 @@ async def list_borrower_loans(
     Example::
 
         page = await list_borrower_loans(
-            session, borrower_id=member.id, status=LoanStatus.RETURNED, limit=50, offset=0
+            session, borrower_id=member.id, status=LoanStatus.RETURNED, limit=50, offset=0,
+            now=now_utc(), due_soon=timedelta(days=3),
         )
     """
     conditions = [Loan.borrower_id == borrower_id]
@@ -295,21 +355,57 @@ async def list_borrower_loans(
         .limit(limit)
         .offset(offset)
     )
-    return LoanPage(items=[_to_loan_read(*row) for row in rows], total=total or 0)
+    items = [_to_member_loan_read(*row, now=now, due_soon=due_soon) for row in rows]
+    return MemberLoanPage(items=items, total=total or 0)
+
+
+async def list_borrower_reminders(
+    session: AsyncSession, *, borrower_id: uuid.UUID, now: datetime, due_soon: timedelta
+) -> MemberLoanPage:
+    """``borrower_id``'s active loans that are overdue or due soon, soonest due first.
+
+    Overdue loans sort first because they fell due earliest. At most
+    ``PAGE_SIZE_MAX`` are returned; ``total`` counts them all.
+
+    Example::
+
+        reminders = await list_borrower_reminders(
+            session, borrower_id=member.id, now=now_utc(), due_soon=timedelta(days=3)
+        )
+    """
+    conditions = [
+        Loan.borrower_id == borrower_id,
+        Loan.returned_at.is_(None),
+        Loan.due_at <= now + due_soon,
+    ]
+    total = await session.scalar(select(func.count()).select_from(Loan).where(*conditions))
+    rows = await session.execute(
+        _loan_rows().where(*conditions).order_by(Loan.due_at, Loan.id).limit(PAGE_SIZE_MAX)
+    )
+    items = [_to_member_loan_read(*row, now=now, due_soon=due_soon) for row in rows]
+    return MemberLoanPage(items=items, total=total or 0)
 
 
 def _http_error(refused: LoanRefused) -> HTTPException:
     return HTTPException(status_code=_REFUSAL_STATUS[refused.refusal], detail=refused.refusal.value)
 
 
-def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> APIRouter:
+def loans_router(
+    database: Database, auth: Auth, *, loan_period: timedelta, due_soon: timedelta
+) -> APIRouter:
     """Router for checkout, check-in and loan lists.
 
-    Lending routes need ``LEND_BOOKS``; ``GET /api/loans/mine`` needs ``VIEW_OWN_LOANS``.
+    Lending routes need ``LEND_BOOKS``; the ``/api/loans/mine`` routes need
+    ``VIEW_OWN_LOANS``. ``due_soon`` is how long before its due date a loan
+    starts showing a reminder.
 
     Example::
 
-        app.include_router(loans_router(database, auth, loan_period=timedelta(days=14)))
+        app.include_router(
+            loans_router(
+                database, auth, loan_period=timedelta(days=14), due_soon=timedelta(days=3)
+            )
+        )
     """
     router = APIRouter(prefix="/api/loans", tags=["loans"])
     lend = auth.require_capability(Capability.LEND_BOOKS)
@@ -349,17 +445,32 @@ def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> A
     ) -> LoanPage:
         return await list_active_loans(session, limit=limit, offset=offset)
 
-    @router.get("/mine", response_model=LoanPage)
+    @router.get("/mine", response_model=MemberLoanPage)
     async def my_loans(
         borrower: Annotated[User, Depends(view_own)],
         session: Annotated[AsyncSession, Depends(database.session)],
         status: LoanStatus = LoanStatus.ALL,
         limit: Limit = PAGE_SIZE_DEFAULT,
         offset: Offset = 0,
-    ) -> LoanPage:
+    ) -> MemberLoanPage:
         # The borrower is always the signed-in user, never a query parameter.
         return await list_borrower_loans(
-            session, borrower_id=borrower.id, status=status, limit=limit, offset=offset
+            session,
+            borrower_id=borrower.id,
+            status=status,
+            limit=limit,
+            offset=offset,
+            now=now_utc(),
+            due_soon=due_soon,
+        )
+
+    @router.get("/mine/reminders", response_model=MemberLoanPage)
+    async def my_reminders(
+        borrower: Annotated[User, Depends(view_own)],
+        session: Annotated[AsyncSession, Depends(database.session)],
+    ) -> MemberLoanPage:
+        return await list_borrower_reminders(
+            session, borrower_id=borrower.id, now=now_utc(), due_soon=due_soon
         )
 
     @router.post("/{loan_id}/return", response_model=LoanRead)

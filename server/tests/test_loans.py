@@ -1,7 +1,7 @@
 import asyncio
 import uuid
 from collections import Counter
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,11 +10,11 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from lms.database import Database
-from lms.loans import LoanRefusal, LoanRefused, check_out, find_borrower
+from lms.loans import LoanRefusal, LoanRefused, Reminder, check_out, find_borrower, reminder_for
 from lms.models import Book, Loan, User
 from lms.roles import Role
 from lms.settings import Settings
-from tests.conftest import LOAN_PERIOD, add_books, book, login, seed_account, sign_in_as
+from tests.conftest import DUE_SOON, LOAN_PERIOD, add_books, book, login, seed_account, sign_in_as
 
 READER = "reader@example.com"
 
@@ -515,3 +515,112 @@ def test_my_loans_is_403_for_staff(client: TestClient, settings: Settings, role:
     sign_in_as(client, settings, role)
 
     assert my_loans(client).status_code == 403
+
+
+NOW = datetime(2026, 11, 17, 12, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("due_in", "expected"),
+    [
+        (-timedelta(days=2), Reminder.OVERDUE),
+        (timedelta(0), Reminder.OVERDUE),
+        (timedelta(seconds=1), Reminder.DUE_SOON),
+        (DUE_SOON, Reminder.DUE_SOON),
+        (DUE_SOON + timedelta(seconds=1), None),
+    ],
+)
+def test_reminder_for_an_active_loan(due_in: timedelta, expected: Reminder | None) -> None:
+    reminder = reminder_for(due_at=NOW + due_in, returned_at=None, now=NOW, due_soon=DUE_SOON)
+
+    assert reminder is expected
+
+
+def test_a_returned_loan_needs_no_reminder_even_if_it_was_late() -> None:
+    reminder = reminder_for(
+        due_at=NOW - timedelta(days=5), returned_at=NOW, now=NOW, due_soon=DUE_SOON
+    )
+
+    assert reminder is None
+
+
+def move_due_date(settings: Settings, loan_id: int, due_in: timedelta) -> None:
+    """Set loan ``loan_id`` to fall due ``due_in`` from now (negative: in the past)."""
+
+    async def run() -> None:
+        database = Database(settings.db_url)
+        try:
+            async with database.session_maker() as session:
+                await session.execute(
+                    update(Loan).where(Loan.id == loan_id).values(due_at=now_utc() + due_in)
+                )
+                await session.commit()
+        finally:
+            await database.dispose()
+
+    asyncio.run(run())
+
+
+def my_reminders(client: TestClient):
+    return client.get("/api/loans/mine/reminders")
+
+
+@pytest.fixture
+def due_dates(librarian: TestClient, settings: Settings) -> dict[str, dict]:
+    """READER holds Overdue (2 days late), Soon (due tomorrow), Later (default
+    due date) and returned Late (was overdue); another member holds an overdue
+    loan too. ``librarian`` ends signed in as READER."""
+    seed_account(settings, OTHER_READER, Role.MEMBER)
+    loans = {title: lend(librarian, settings, title) for title in ("Soon", "Overdue", "Later")}
+    late = lend(librarian, settings, "Late")
+    check_in(librarian, late["id"])
+    add_books(settings, [book("Theirs")])
+    theirs = checkout(librarian, catalog_entry(librarian, "Theirs")["id"], OTHER_READER).json()
+    move_due_date(settings, loans["Overdue"]["id"], -timedelta(days=2))
+    move_due_date(settings, loans["Soon"]["id"], timedelta(days=1))
+    move_due_date(settings, late["id"], -timedelta(days=2))
+    move_due_date(settings, theirs["id"], -timedelta(days=2))
+    assert login(librarian, READER) == 204
+    return loans
+
+
+def test_reminders_list_overdue_then_due_soon_loans(
+    librarian: TestClient, due_dates: dict[str, dict]
+) -> None:
+    page = my_reminders(librarian).json()
+
+    assert page["total"] == 2
+    assert [(loan["book_title"], loan["reminder"]) for loan in page["items"]] == [
+        ("Overdue", "overdue"),
+        ("Soon", "due_soon"),
+    ]
+
+
+def test_my_loans_mark_each_loan_with_its_reminder(
+    librarian: TestClient, due_dates: dict[str, dict]
+) -> None:
+    items = my_loans(librarian).json()["items"]
+
+    assert {loan["book_title"]: loan["reminder"] for loan in items} == {
+        "Overdue": "overdue",
+        "Soon": "due_soon",
+        "Later": None,
+        "Late": None,
+    }
+
+
+def test_reminders_are_empty_when_nothing_is_due(client: TestClient, settings: Settings) -> None:
+    sign_in_as(client, settings, Role.MEMBER)
+
+    assert my_reminders(client).json() == {"items": [], "total": 0}
+
+
+def test_reminders_are_401_when_signed_out(client: TestClient) -> None:
+    assert my_reminders(client).status_code == 401
+
+
+@pytest.mark.parametrize("role", [Role.LIBRARIAN, Role.ADMIN])
+def test_reminders_are_403_for_staff(client: TestClient, settings: Settings, role: Role) -> None:
+    sign_in_as(client, settings, role)
+
+    assert my_reminders(client).status_code == 403

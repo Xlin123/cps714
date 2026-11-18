@@ -61,3 +61,36 @@ storage, so the history needs no new data.
 
 **Consequences.** Staff viewing a member's history (LMS-13) can reuse
 `list_borrower_loans` behind `LEND_BOOKS`, once member lookup (E1) exists.
+
+## 2026-11-17: Due-soon and overdue reminders
+
+**Context.** Members want to be reminded before a loan falls due and once it
+is overdue, so they return on time. Reminders are shown in the web app only:
+no email, push or device notifications.
+
+**Decision.**
+
+- Reminders are computed when requested, from each loan's `due_at`; nothing is
+  stored and no scheduled job runs. A loan is **overdue** from the instant it
+  falls due and **due soon** within `LMS_DUE_SOON_DAYS` (default 3) before
+  that. Returned loans never have one. The server decides, with its own
+  clock, so a wrong clock on the member's computer cannot change the answer.
+- `GET /api/loans/mine/reminders` lists the member's overdue and due-soon
+  loans, soonest due first (so overdue ones lead). `GET /api/loans/mine` marks
+  every loan with the same `reminder` field.
+- The client shows a badge on the "My loans" nav link: a red count if
+  anything is overdue, an amber count if loans are only due soon, and a green
+  check when nothing needs attention (shown only after reminders load, so a
+  failed request never claims "all clear"). It also shows a "Needs attention"
+  list at the top of My loans, and "Due soon" / "Overdue" in the history
+  table. Reminders refetch on
+  each navigation; due dates change by the day, so there is no polling.
+- A due-soon reminder can be dismissed; the dismissal is kept per user in the
+  browser's `localStorage`. Overdue reminders cannot be dismissed: they stay
+  until the book is returned. A dismissed due-soon loan that becomes overdue
+  shows again.
+
+**Consequences.** Dismissals do not follow a member to another browser;
+storing them on the server would need a new table. A bell-and-dropdown
+becomes worthwhile once there are other notification types (e.g. holds,
+LMS-16).

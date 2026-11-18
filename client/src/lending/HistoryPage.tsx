@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useLoad } from '../hooks/useLoad';
 import { fetchMyLoans, HISTORY_PAGE_SIZE } from './api';
-import type { Loan, LoanStatus } from './api';
+import type { LoanStatus, MemberLoan } from './api';
+import { ReminderNotices } from './ReminderNotices';
 
 const FILTERS: { status: LoanStatus; label: string; empty: string }[] = [
   { status: 'all', label: 'All', empty: "You haven't borrowed any books yet." },
@@ -11,9 +12,10 @@ const FILTERS: { status: LoanStatus; label: string; empty: string }[] = [
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString();
 
-function ReturnedCell({ loan, now }: { loan: Loan; now: number }) {
+function ReturnedCell({ loan }: { loan: MemberLoan }) {
   if (loan.returned_at) return <td>{formatDate(loan.returned_at)}</td>;
-  if (new Date(loan.due_at).getTime() < now) return <td className="overdue">Overdue</td>;
+  if (loan.reminder === 'overdue') return <td className="overdue">Overdue</td>;
+  if (loan.reminder === 'due_soon') return <td className="due-soon">Due soon</td>;
   return <td>On loan</td>;
 }
 
@@ -21,8 +23,6 @@ function ReturnedCell({ loan, now }: { loan: Loan; now: number }) {
 export function HistoryPage() {
   const [status, setStatus] = useState<LoanStatus>('all');
   const [offset, setOffset] = useState(0);
-  // Fixed when the page opens, so "Overdue" doesn't flicker between renders.
-  const [now] = useState(() => Date.now());
   const { state } = useLoad(() => fetchMyLoans(status, offset), [status, offset]);
   const filter = FILTERS.find((f) => f.status === status) ?? FILTERS[0];
 
@@ -34,6 +34,7 @@ export function HistoryPage() {
   return (
     <div className="page wide">
       <h1>My loans</h1>
+      <ReminderNotices />
       <div className="status-filter" role="group" aria-label="Show loans">
         {FILTERS.map((f) => (
           <button
@@ -53,7 +54,7 @@ export function HistoryPage() {
         (state.data.total === 0 ? (
           <p>{filter.empty}</p>
         ) : (
-          <LoanHistory page={state.data} offset={offset} now={now} onPage={setOffset} />
+          <LoanHistory page={state.data} offset={offset} onPage={setOffset} />
         ))}
     </div>
   );
@@ -62,12 +63,10 @@ export function HistoryPage() {
 function LoanHistory({
   page,
   offset,
-  now,
   onPage,
 }: {
-  page: { items: Loan[]; total: number };
+  page: { items: MemberLoan[]; total: number };
   offset: number;
-  now: number;
   onPage: (offset: number) => void;
 }) {
   const hasPrevious = offset > 0;
@@ -91,7 +90,7 @@ function LoanHistory({
                 <td>{loan.book_title}</td>
                 <td>{formatDate(loan.checked_out_at)}</td>
                 <td>{formatDate(loan.due_at)}</td>
-                <ReturnedCell loan={loan} now={now} />
+                <ReturnedCell loan={loan} />
               </tr>
             ))}
           </tbody>

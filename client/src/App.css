@@ -193,9 +193,71 @@
   font-weight: 500;
 }
 
-.catalog .unavailable,
-.catalog .overdue {
+.catalog .unavailable {
   color: #c0392b;
+}
+
+.catalog .overdue {
+  color: var(--danger);
+}
+
+.catalog .due-soon {
+  color: var(--warning);
+}
+
+/* Count of loans needing attention, beside "My loans" in the nav bar. */
+.nav-badge {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-left: 6px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #b45309;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.nav-badge.overdue {
+  background: #c0392b;
+}
+
+.nav-badge.clear {
+  background: #15803d;
+}
+
+.notices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--warning);
+  border-radius: 6px;
+  color: var(--text-h);
+}
+
+.notice.overdue {
+  border-left-color: var(--danger);
+}
+
+.page .notice button {
+  padding: 4px 10px;
+  font-size: 14px;
 }
 
 .status-filter {

@@ -39,3 +39,25 @@ counts copies per book (`total_copies`) but has no table of physical copies.
   can add a filter.
 - The `loan` table is new, so `create_all` adds it to existing databases. A
   change to an existing table would still need a reset or a migration tool.
+
+## 2026-11-17: Member borrowing history (LMS-12)
+
+**Context.** Members need to see their past and current loans. Every loan row
+already keeps its checkout, due and return times, and retired books stay in
+storage, so the history needs no new data.
+
+**Decision.**
+
+- `GET /api/loans/mine?status=all|active|returned&limit&offset` returns the
+  signed-in member's loans, most recently checked out first (`status` defaults
+  to `all`). The borrower is always the session user; there is no parameter
+  that names another borrower.
+- It is guarded by a new `view_own_loans` capability, held by members only.
+  `REQUIREMENTS.md` §3 lists "view own loans" for every signed-in role, but
+  staff accounts cannot borrow, so their history would always be empty.
+- Loans of books retired since are included, with their titles.
+- The client shows it at `/history` ("My loans"), with All / On loan /
+  Returned filters. Unreturned loans past their due date show as overdue.
+
+**Consequences.** Staff viewing a member's history (LMS-13) can reuse
+`list_borrower_loans` behind `LEND_BOOKS`, once member lookup (E1) exists.

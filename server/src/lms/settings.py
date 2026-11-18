@@ -8,6 +8,7 @@ from pathlib import Path
 DEFAULT_DB_URL = "sqlite+aiosqlite:///./lms.sqlite3"
 DEFAULT_SESSION_LIFETIME_SECONDS = 60 * 60 * 24
 DEFAULT_LOAN_PERIOD_DAYS = 14
+DEFAULT_DUE_SOON_DAYS = 3
 
 
 class SettingsError(ValueError):
@@ -33,6 +34,8 @@ class Settings:
     is_demo_data_enabled: bool = False
     # How long a checkout lasts before the loan is due.
     loan_period_days: int = DEFAULT_LOAN_PERIOD_DAYS
+    # How close to its due date a loan starts showing a "due soon" reminder.
+    due_soon_days: int = DEFAULT_DUE_SOON_DAYS
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -55,6 +58,7 @@ class Settings:
             loan_period_days=_parse_positive_int(
                 source, "LMS_LOAN_PERIOD_DAYS", DEFAULT_LOAN_PERIOD_DAYS
             ),
+            due_soon_days=_parse_positive_int(source, "LMS_DUE_SOON_DAYS", DEFAULT_DUE_SOON_DAYS),
         )
 
 

@@ -50,12 +50,30 @@ export async function checkIn(loanId: number): Promise<Loan> {
 /** Page size for the borrowing history; the server rejects anything above 100. */
 export const HISTORY_PAGE_SIZE = 50;
 
+/** Why an active loan needs attention; the server decides, using its own clock. */
+export type Reminder = 'overdue' | 'due_soon';
+
+/** A loan as its borrower sees it. */
+export interface MemberLoan extends Loan {
+  reminder: Reminder | null;
+}
+
+export interface MemberLoanPage {
+  items: MemberLoan[];
+  total: number;
+}
+
 /** The signed-in member's own loans, most recently checked out first. */
-export async function fetchMyLoans(status: LoanStatus, offset: number): Promise<LoanPage> {
+export async function fetchMyLoans(status: LoanStatus, offset: number): Promise<MemberLoanPage> {
   const query = new URLSearchParams({
     status,
     limit: String(HISTORY_PAGE_SIZE),
     offset: String(offset),
   });
-  return getJson<LoanPage>(`/api/loans/mine?${query}`);
+  return getJson<MemberLoanPage>(`/api/loans/mine?${query}`);
+}
+
+/** The signed-in member's overdue and due-soon loans, soonest due first. */
+export async function fetchMyReminders(): Promise<MemberLoanPage> {
+  return getJson<MemberLoanPage>('/api/loans/mine/reminders');
 }

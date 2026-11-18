@@ -1,6 +1,12 @@
 import pytest
 
-from lms.settings import DEFAULT_DB_URL, DEFAULT_LOAN_PERIOD_DAYS, Settings, SettingsError
+from lms.settings import (
+    DEFAULT_DB_URL,
+    DEFAULT_DUE_SOON_DAYS,
+    DEFAULT_LOAN_PERIOD_DAYS,
+    Settings,
+    SettingsError,
+)
 
 
 def test_defaults_are_secure() -> None:
@@ -35,3 +41,14 @@ def test_loan_period_defaults_and_can_be_set() -> None:
 def test_loan_period_must_be_a_positive_integer(raw: str) -> None:
     with pytest.raises(SettingsError):
         Settings.from_env({"LMS_LOAN_PERIOD_DAYS": raw})
+
+
+def test_due_soon_window_defaults_and_can_be_set() -> None:
+    assert Settings.from_env({}).due_soon_days == DEFAULT_DUE_SOON_DAYS
+    assert Settings.from_env({"LMS_DUE_SOON_DAYS": "5"}).due_soon_days == 5
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", "two"])
+def test_due_soon_window_must_be_a_positive_integer(raw: str) -> None:
+    with pytest.raises(SettingsError):
+        Settings.from_env({"LMS_DUE_SOON_DAYS": raw})

@@ -61,6 +61,7 @@ def create_app(
     client_dist_dir: Path | None,
     is_demo_data_enabled: bool,
     loan_period: timedelta,
+    due_soon: timedelta,
 ) -> FastAPI:
     """Build the app. The app takes ownership of ``database`` and disposes it on shutdown.
 
@@ -73,6 +74,7 @@ def create_app(
             client_dist_dir=settings.client_dist_dir,
             is_demo_data_enabled=settings.is_demo_data_enabled,
             loan_period=timedelta(days=settings.loan_period_days),
+            due_soon=timedelta(days=settings.due_soon_days),
         )
     """
 
@@ -91,7 +93,7 @@ def create_app(
     # Each feature router takes only what it needs; add new features here.
     for feature_router in (
         catalog_router(database, auth),
-        loans_router(database, auth, loan_period=loan_period),
+        loans_router(database, auth, loan_period=loan_period, due_soon=due_soon),
         staff_router(database, auth),
     ):
         app.include_router(feature_router)
@@ -117,4 +119,5 @@ def app_from_env() -> FastAPI:
         client_dist_dir=settings.client_dist_dir,
         is_demo_data_enabled=settings.is_demo_data_enabled,
         loan_period=timedelta(days=settings.loan_period_days),
+        due_soon=timedelta(days=settings.due_soon_days),
     )

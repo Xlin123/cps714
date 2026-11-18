@@ -17,6 +17,7 @@ from lms.catalog import catalog_router
 from lms.database import Database
 from lms.demo import demo_router, seed_demo_accounts, seed_demo_books
 from lms.loans import loans_router
+from lms.members import members_router
 from lms.models import User
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
@@ -94,6 +95,7 @@ def create_app(
     for feature_router in (
         catalog_router(database, auth),
         loans_router(database, auth, loan_period=loan_period, due_soon=due_soon),
+        members_router(database, auth, due_soon=due_soon),
         staff_router(database, auth),
     ):
         app.include_router(feature_router)

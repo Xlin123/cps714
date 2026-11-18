@@ -78,9 +78,12 @@ no email, push or device notifications.
 - `GET /api/loans/mine/reminders` lists the member's overdue and due-soon
   loans, soonest due first (so overdue ones lead). `GET /api/loans/mine` marks
   every loan with the same `reminder` field.
-- The client shows a count badge on the "My loans" nav link (red if anything
-  is overdue, amber otherwise), a "Needs attention" list at the top of My
-  loans, and "Due soon" / "Overdue" in the history table. Reminders refetch on
+- The client shows a badge on the "My loans" nav link: a red count if
+  anything is overdue, an amber count if loans are only due soon, and a green
+  check when nothing needs attention (shown only after reminders load, so a
+  failed request never claims "all clear"). It also shows a "Needs attention"
+  list at the top of My loans, and "Due soon" / "Overdue" in the history
+  table. Reminders refetch on
   each navigation; due dates change by the day, so there is no polling.
 - A due-soon reminder can be dismissed; the dismissal is kept per user in the
   browser's `localStorage`. Overdue reminders cannot be dismissed: they stay

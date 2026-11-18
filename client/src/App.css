@@ -225,6 +225,10 @@
   background: #c0392b;
 }
 
+.nav-badge.clear {
+  background: #15803d;
+}
+
 .notices {
   display: flex;
   flex-direction: column;

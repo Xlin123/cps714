@@ -63,7 +63,7 @@ export function RemindersProvider({ children }: { children: ReactNode }) {
 
   return (
     <RemindersContext.Provider
-      value={{ reminders, loadedAt: loaded?.loadedAt ?? 0, dismiss }}
+      value={{ reminders, isLoaded: loaded !== null, loadedAt: loaded?.loadedAt ?? 0, dismiss }}
     >
       {children}
     </RemindersContext.Provider>

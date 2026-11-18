@@ -4,6 +4,8 @@ import type { MemberLoan } from './api';
 export interface RemindersState {
   /** Overdue and due-soon loans still worth showing, soonest due first. */
   reminders: MemberLoan[];
+  /** True once reminders have loaded; false while loading, after a failure, or for staff. */
+  isLoaded: boolean;
   /** When `reminders` was fetched (ms since epoch), for "due in N days" wording. */
   loadedAt: number;
   /** Hides a due-soon reminder in this browser. Overdue reminders cannot be hidden. */

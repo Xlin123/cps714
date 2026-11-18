@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import type { Capability } from '../auth/api';
 import { useAuth } from '../auth/useAuth';
+import { useSubmit } from '../hooks/useSubmit';
 import { useReminders } from '../lending/useReminders';
 
 /**
@@ -32,6 +33,7 @@ function MyLoansLink() {
 
 export function NavBar() {
   const { user, logout } = useAuth();
+  const signOut = useSubmit(logout);
   const can = (capability: Capability) => user?.capabilities.includes(capability) ?? false;
 
   return (
@@ -51,7 +53,14 @@ export function NavBar() {
             <span>
               {user.name} ({user.role})
             </span>
-            <button onClick={logout}>Log out</button>
+            <button onClick={signOut.onSubmit} disabled={signOut.submitting}>
+              Log out
+            </button>
+            {signOut.error && (
+              <span className="error" role="alert">
+                {signOut.error}
+              </span>
+            )}
           </>
         ) : (
           <>

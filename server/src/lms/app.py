@@ -22,6 +22,7 @@ from lms.models import User
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
 from lms.staff import staff_router
+from lms.validation import install_validation_handler
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ def create_app(
         await database.dispose()
 
     app = FastAPI(title="LMS", lifespan=lifespan)
+    install_validation_handler(app)
     app.include_router(_auth_router(auth))
     # Each feature router takes only what it needs; add new features here.
     for feature_router in (

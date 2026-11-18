@@ -97,10 +97,27 @@ Requires `manage_staff` (admin). The Staff accounts page (`/admin`) creates libr
 
 Only librarian accounts can be changed (`STAFF_NOT_FOUND` otherwise). See `docs/staff-accounts/decisions.md`.
 
+## Errors
+
+Every refusal has a stable code in `detail`. Request-validation failures (bad JSON, missing or out-of-range fields, bad query parameters) are always:
+
+```json
+HTTP 422
+{
+  "detail": "VALIDATION_FAILED",
+  "errors": [
+    {"field": "title", "message": "Required."},
+    {"field": "total_copies", "message": "Must be 0 or more."}
+  ]
+}
+```
+
+`field` is the API's field name, or `null` when the whole request is at fault (e.g. malformed JSON). Messages are written for users, and submitted values are never echoed back. The client shows each field's message under its input (`useSubmit` with the form's field names, `components/FieldError`); any field error a form doesn't render is folded into the form-level message so nothing is dropped. See `docs/validation/decisions.md`.
+
 ## Adding a feature
 
 - Server: a module in `server/src/lms/` with its schemas, logic and a router factory that takes only what it needs; add the router to the list in `create_app` (`app.py`). Guard endpoints with a capability from `permissions.py`, and add the new capability to `GUARDED_REQUEST_FOR` and `EXPECTED` in `tests/test_permissions.py`.
-- Refusals: raise a stable code as `detail`, and add its user-facing text to `ERROR_MESSAGES` in `client/src/api/http.ts`.
+- Refusals: raise a stable code as `detail`, and add its user-facing text to `ERROR_MESSAGES` in `client/src/api/http.ts`. If the code is about one input, also map it to that field in `ERROR_FIELDS` so forms show it inline.
 - Client: a folder in `client/src/<feature>/` with an `api.ts` built on `getJson`/`send` from `api/http.ts`, pages using `useLoad` for data and `useSubmit` (or `components/ActionButton`) for actions. Mirror new capabilities in `client/src/auth/api.ts`.
 - Tables: new tables are created at startup. The startup schema step also adds the
   book retirement column to existing databases. Other changes to existing

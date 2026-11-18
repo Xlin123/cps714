@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { FieldError } from '../components/FieldError';
+import { invalidProps } from '../components/invalidProps';
 import { useSubmit } from '../hooks/useSubmit';
 import { createLibrarian } from './api';
 import type { StaffMember } from './api';
@@ -9,14 +11,14 @@ export function CreateLibrarianForm({ onCreated }: { onCreated: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [created, setCreated] = useState<StaffMember | null>(null);
-  const { error, submitting, onSubmit } = useSubmit(async () => {
+  const { error, fieldErrors, submitting, onSubmit } = useSubmit(async () => {
     setCreated(null);
     setCreated(await createLibrarian({ name, email, password }));
     setName('');
     setEmail('');
     setPassword('');
     onCreated();
-  });
+  }, ['name', 'email', 'password']);
 
   return (
     <form className="narrow" onSubmit={onSubmit}>
@@ -28,7 +30,9 @@ export function CreateLibrarianForm({ onCreated }: { onCreated: () => void }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
+        {...invalidProps('staff-name', fieldErrors.name)}
       />
+      <FieldError inputId="staff-name" message={fieldErrors.name} />
       <label htmlFor="staff-email">Email</label>
       <input
         id="staff-email"
@@ -37,7 +41,9 @@ export function CreateLibrarianForm({ onCreated }: { onCreated: () => void }) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         required
+        {...invalidProps('staff-email', fieldErrors.email)}
       />
+      <FieldError inputId="staff-email" message={fieldErrors.email} />
       <label htmlFor="staff-password">Starting password</label>
       <input
         id="staff-password"
@@ -48,7 +54,9 @@ export function CreateLibrarianForm({ onCreated }: { onCreated: () => void }) {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
+        {...invalidProps('staff-password', fieldErrors.password)}
       />
+      <FieldError inputId="staff-password" message={fieldErrors.password} />
       {error && <p className="error">{error}</p>}
       {created && (
         <p role="status">

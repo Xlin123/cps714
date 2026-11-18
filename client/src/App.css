@@ -413,3 +413,18 @@
 .member-details dd {
   margin: 0;
 }
+
+.page .field-error {
+  margin: 0;
+  font-size: 14px;
+  color: var(--danger);
+}
+
+.page input[aria-invalid='true'],
+.page select[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.navbar .error {
+  color: var(--danger);
+}

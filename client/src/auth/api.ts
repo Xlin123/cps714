@@ -1,4 +1,4 @@
-import { jsonBody, send } from '../api/http';
+import { ApiError, jsonBody, reach, send } from '../api/http';
 
 export type Role = 'member' | 'librarian' | 'admin';
 
@@ -26,9 +26,10 @@ export interface RegisterInput {
 
 /** Returns the signed-in user, or null when there is no valid session. */
 export async function fetchMe(): Promise<SessionUser | null> {
-  const res = await fetch('/api/auth/me');
+  const res = await reach('/api/auth/me');
   if (res.status === 401) return null;
-  if (!res.ok) throw new Error(`GET /api/auth/me failed with ${res.status}`);
+  // ApiError so a failure right after logging in shows on the login form.
+  if (!res.ok) throw new ApiError(`Could not load your account (error ${res.status}).`);
   return res.json();
 }
 
@@ -46,9 +47,9 @@ export async function register(input: RegisterInput): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
-  const res = await fetch('/api/auth/logout', { method: 'POST' });
+  const res = await reach('/api/auth/logout', { method: 'POST' });
   // 401 means the session had already expired, which is the state we want.
-  if (!res.ok && res.status !== 401) throw new Error(`Logout failed with ${res.status}`);
+  if (!res.ok && res.status !== 401) throw new ApiError(`Logout failed (error ${res.status}).`);
 }
 
 export interface DemoAccount {

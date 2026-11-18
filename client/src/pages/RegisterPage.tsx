@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { FieldError } from '../components/FieldError';
+import { invalidProps } from '../components/invalidProps';
 import { useSubmit } from '../hooks/useSubmit';
 
 export function RegisterPage() {
@@ -8,7 +10,10 @@ export function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { error, submitting, onSubmit } = useSubmit(() => register({ name, email, password }));
+  const { error, fieldErrors, submitting, onSubmit } = useSubmit(
+    () => register({ name, email, password }),
+    ['name', 'email', 'password'],
+  );
 
   return (
     <div className="page">
@@ -23,7 +28,9 @@ export function RegisterPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
+          {...invalidProps('name', fieldErrors.name)}
         />
+        <FieldError inputId="name" message={fieldErrors.name} />
         <label htmlFor="email">Email</label>
         <input
           id="email"
@@ -32,7 +39,9 @@ export function RegisterPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          {...invalidProps('email', fieldErrors.email)}
         />
+        <FieldError inputId="email" message={fieldErrors.email} />
         <label htmlFor="password">Password</label>
         <input
           id="password"
@@ -43,7 +52,9 @@ export function RegisterPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          {...invalidProps('password', fieldErrors.password)}
         />
+        <FieldError inputId="password" message={fieldErrors.password} />
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={submitting}>
           {submitting ? 'Creating account…' : 'Create account'}

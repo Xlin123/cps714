@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, MouseEvent } from 'react';
+import { ApiError } from '../api/http';
+import { FieldError } from '../components/FieldError';
+import { invalidProps } from '../components/invalidProps';
+import { useSubmit } from '../hooks/useSubmit';
 import { deleteBook, updateBook } from './api';
 import type { Book, BookInput } from './api';
 
@@ -28,6 +32,8 @@ function TrashIcon() {
   );
 }
 
+const BOOK_FIELDS = ['title', 'author', 'isbn', 'category', 'total_copies'] as const;
+
 function toForm(book: Book): BookInput {
   return {
     title: book.title,
@@ -51,59 +57,48 @@ export function BookEditForm({
 }) {
   const panel = useRef<HTMLElement>(null);
   const [form, setForm] = useState(() => toForm(book));
-  const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const save = useSubmit(async () => {
+    setSuccess(null);
+    if (!Number.isInteger(form.total_copies) || form.total_copies < 0) {
+      throw new ApiError('', { total_copies: 'Must be a whole number of zero or more.' });
+    }
+    const updated = await updateBook(book.id, form);
+    setForm(toForm(updated));
+    setSuccess('Changes saved.');
+    onSaved(updated);
+  }, BOOK_FIELDS);
+  const remove = useSubmit(async () => {
+    if (!window.confirm(`Remove "${book.title}" from the catalogue?`)) return;
+    setSuccess(null);
+    await deleteBook(book.id);
+    onRemoved();
+  });
 
   useEffect(() => {
     panel.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, []);
 
   function update(field: keyof BookInput, value: string | number) {
-    setError(null);
+    save.clear();
+    remove.clear();
     setSuccess(null);
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!Number.isInteger(form.total_copies) || form.total_copies < 0) {
-      setError('Copies must be a whole number of zero or more.');
-      return;
-    }
-
-    setError(null);
-    setSuccess(null);
-    setSaving(true);
-    try {
-      const updated = await updateBook(book.id, form);
-      setForm(toForm(updated));
-      setSuccess('Changes saved.');
-      onSaved(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove() {
-    if (!window.confirm(`Remove "${book.title}" from the catalogue?`)) return;
-
-    setError(null);
-    setSuccess(null);
-    setRemoving(true);
-    try {
-      await deleteBook(book.id);
-      onRemoved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRemoving(false);
-    }
-  }
-
+  // Each action clears the other's refusal so only the latest one shows.
+  const onSave = (event: FormEvent) => {
+    remove.clear();
+    void save.onSubmit(event);
+  };
+  const onRemove = (event: MouseEvent) => {
+    save.clear();
+    void remove.onSubmit(event);
+  };
+  const saving = save.submitting;
+  const removing = remove.submitting;
+  const fieldErrors = save.fieldErrors;
+  const error = save.error ?? remove.error;
   const busy = saving || removing;
 
   return (
@@ -123,7 +118,7 @@ export function BookEditForm({
         {book.available_copies} of {book.total_copies} copies currently available. Total copies
         cannot be set below the number currently on loan.
       </p>
-      <form onSubmit={save}>
+      <form onSubmit={onSave}>
         <label htmlFor="edit-book-title">Title</label>
         <input
           id="edit-book-title"
@@ -132,7 +127,9 @@ export function BookEditForm({
           onChange={(event) => update('title', event.target.value)}
           autoFocus
           required
+          {...invalidProps('edit-book-title', fieldErrors.title)}
         />
+        <FieldError inputId="edit-book-title" message={fieldErrors.title} />
 
         <label htmlFor="edit-book-author">Author</label>
         <input
@@ -141,7 +138,9 @@ export function BookEditForm({
           value={form.author}
           onChange={(event) => update('author', event.target.value)}
           required
+          {...invalidProps('edit-book-author', fieldErrors.author)}
         />
+        <FieldError inputId="edit-book-author" message={fieldErrors.author} />
 
         <label htmlFor="edit-book-isbn">ISBN</label>
         <input
@@ -150,7 +149,9 @@ export function BookEditForm({
           value={form.isbn}
           onChange={(event) => update('isbn', event.target.value)}
           required
+          {...invalidProps('edit-book-isbn', fieldErrors.isbn)}
         />
+        <FieldError inputId="edit-book-isbn" message={fieldErrors.isbn} />
 
         <label htmlFor="edit-book-category">Genre</label>
         <input
@@ -159,7 +160,9 @@ export function BookEditForm({
           value={form.category}
           onChange={(event) => update('category', event.target.value)}
           required
+          {...invalidProps('edit-book-category', fieldErrors.category)}
         />
+        <FieldError inputId="edit-book-category" message={fieldErrors.category} />
 
         <label htmlFor="edit-book-copies">Total copies</label>
         <input
@@ -170,7 +173,9 @@ export function BookEditForm({
           value={form.total_copies}
           onChange={(event) => update('total_copies', Number(event.target.value))}
           required
+          {...invalidProps('edit-book-copies', fieldErrors.total_copies)}
         />
+        <FieldError inputId="edit-book-copies" message={fieldErrors.total_copies} />
 
         {error && <p className="error">{error}</p>}
         {success && (
@@ -185,7 +190,7 @@ export function BookEditForm({
           <button
             type="button"
             className="remove-book"
-            onClick={remove}
+            onClick={onRemove}
             disabled={busy}
             aria-label={
               removing ? `Removing ${book.title}` : `Remove ${book.title} from catalogue`

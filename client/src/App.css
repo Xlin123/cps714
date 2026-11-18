@@ -193,8 +193,22 @@
   font-weight: 500;
 }
 
-.catalog .unavailable {
+.catalog .unavailable,
+.catalog .overdue {
   color: #c0392b;
+}
+
+.status-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.status-filter button[aria-pressed='true'] {
+  border-color: var(--accent-border);
+  color: var(--text-h);
+  font-weight: 500;
 }
 
 .catalog button.icon-button {

@@ -72,6 +72,14 @@ class LoanRead(BaseModel):
     returned_at: datetime | None
 
 
+class LoanStatus(StrEnum):
+    """Which loans a list shows: still out, back, or both."""
+
+    ACTIVE = "active"
+    RETURNED = "returned"
+    ALL = "all"
+
+
 class LoanPage(BaseModel):
     """One page of loans. ``total`` counts every match, not just this page."""
 
@@ -256,12 +264,48 @@ async def list_active_loans(session: AsyncSession, *, limit: int, offset: int) -
     return LoanPage(items=[_to_loan_read(*row) for row in rows], total=total or 0)
 
 
+async def list_borrower_loans(
+    session: AsyncSession,
+    *,
+    borrower_id: uuid.UUID,
+    status: LoanStatus,
+    limit: int,
+    offset: int,
+) -> LoanPage:
+    """One page of ``borrower_id``'s loans, most recently checked out first.
+
+    Loans of books retired since are included, so history stays complete.
+
+    Example::
+
+        page = await list_borrower_loans(
+            session, borrower_id=member.id, status=LoanStatus.RETURNED, limit=50, offset=0
+        )
+    """
+    conditions = [Loan.borrower_id == borrower_id]
+    if status is LoanStatus.ACTIVE:
+        conditions.append(Loan.returned_at.is_(None))
+    elif status is LoanStatus.RETURNED:
+        conditions.append(Loan.returned_at.is_not(None))
+    total = await session.scalar(select(func.count()).select_from(Loan).where(*conditions))
+    rows = await session.execute(
+        _loan_rows()
+        .where(*conditions)
+        .order_by(Loan.checked_out_at.desc(), Loan.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return LoanPage(items=[_to_loan_read(*row) for row in rows], total=total or 0)
+
+
 def _http_error(refused: LoanRefused) -> HTTPException:
     return HTTPException(status_code=_REFUSAL_STATUS[refused.refusal], detail=refused.refusal.value)
 
 
 def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> APIRouter:
-    """Router for checkout, check-in and the active-loan list. Staff only (``LEND_BOOKS``).
+    """Router for checkout, check-in and loan lists.
+
+    Lending routes need ``LEND_BOOKS``; ``GET /api/loans/mine`` needs ``VIEW_OWN_LOANS``.
 
     Example::
 
@@ -269,6 +313,7 @@ def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> A
     """
     router = APIRouter(prefix="/api/loans", tags=["loans"])
     lend = auth.require_capability(Capability.LEND_BOOKS)
+    view_own = auth.require_capability(Capability.VIEW_OWN_LOANS)
 
     @router.post("", status_code=status.HTTP_201_CREATED, response_model=LoanRead)
     async def checkout(
@@ -303,6 +348,19 @@ def loans_router(database: Database, auth: Auth, *, loan_period: timedelta) -> A
         offset: Offset = 0,
     ) -> LoanPage:
         return await list_active_loans(session, limit=limit, offset=offset)
+
+    @router.get("/mine", response_model=LoanPage)
+    async def my_loans(
+        borrower: Annotated[User, Depends(view_own)],
+        session: Annotated[AsyncSession, Depends(database.session)],
+        status: LoanStatus = LoanStatus.ALL,
+        limit: Limit = PAGE_SIZE_DEFAULT,
+        offset: Offset = 0,
+    ) -> LoanPage:
+        # The borrower is always the signed-in user, never a query parameter.
+        return await list_borrower_loans(
+            session, borrower_id=borrower.id, status=status, limit=limit, offset=offset
+        )
 
     @router.post("/{loan_id}/return", response_model=LoanRead)
     async def check_in(

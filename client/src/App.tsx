@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { Capability } from './auth/api';
 import { useAuth } from './auth/useAuth';
 import { CatalogPage } from './catalog/CatalogPage';
+import { HistoryPage } from './lending/HistoryPage';
 import { LendingPage } from './lending/LendingPage';
 import { NavBar } from './components/NavBar';
 import { LoginPage } from './pages/LoginPage';
@@ -71,6 +72,14 @@ function App() {
             <GuestOnly>
               <RegisterPage />
             </GuestOnly>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireCapability capability="view_own_loans">
+              <HistoryPage />
+            </RequireCapability>
           }
         />
         <Route

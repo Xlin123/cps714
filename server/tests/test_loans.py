@@ -14,7 +14,7 @@ from lms.loans import LoanRefusal, LoanRefused, check_out, find_borrower
 from lms.models import Book, Loan, User
 from lms.roles import Role
 from lms.settings import Settings
-from tests.conftest import LOAN_PERIOD, add_books, book, seed_account, sign_in_as
+from tests.conftest import LOAN_PERIOD, add_books, book, login, seed_account, sign_in_as
 
 READER = "reader@example.com"
 
@@ -424,3 +424,94 @@ def test_loan_actions_are_403_for_a_member(
     sign_in_as(client, settings, Role.MEMBER)
 
     assert client.request(method, path).status_code == 403
+
+
+OTHER_READER = "other.reader@example.com"
+
+
+def my_loans(client: TestClient, **params: object):
+    return client.get("/api/loans/mine", params=params)
+
+
+@pytest.fixture
+def history(librarian: TestClient, settings: Settings) -> dict[str, dict]:
+    """READER borrowed Alpha (returned), then Bravo (still out); another member
+    borrowed Charlie. ``librarian`` ends signed in as READER."""
+    seed_account(settings, OTHER_READER, Role.MEMBER)
+    alpha = lend(librarian, settings, "Alpha")
+    check_in(librarian, alpha["id"])
+    bravo = lend(librarian, settings, "Bravo")
+    add_books(settings, [book("Charlie")])
+    charlie = checkout(librarian, catalog_entry(librarian, "Charlie")["id"], OTHER_READER).json()
+    assert login(librarian, READER) == 204
+    return {"alpha": alpha, "bravo": bravo, "charlie": charlie}
+
+
+def test_my_loans_lists_only_my_loans_newest_first(
+    librarian: TestClient, history: dict[str, dict]
+) -> None:
+    page = my_loans(librarian).json()
+
+    assert page["total"] == 2
+    assert [loan["id"] for loan in page["items"]] == [
+        history["bravo"]["id"],
+        history["alpha"]["id"],
+    ]
+    assert {loan["borrower_email"] for loan in page["items"]} == {READER}
+
+
+def test_my_loans_filters_by_status(librarian: TestClient, history: dict[str, dict]) -> None:
+    returned = my_loans(librarian, status="returned").json()
+    active = my_loans(librarian, status="active").json()
+
+    assert [loan["id"] for loan in returned["items"]] == [history["alpha"]["id"]]
+    assert returned["items"][0]["returned_at"] is not None
+    assert returned["total"] == 1
+    assert [loan["id"] for loan in active["items"]] == [history["bravo"]["id"]]
+    assert active["items"][0]["returned_at"] is None
+
+
+def test_my_loans_rejects_an_unknown_status(
+    librarian: TestClient, history: dict[str, dict]
+) -> None:
+    assert my_loans(librarian, status="overdue").status_code == 422
+
+
+def test_my_loans_pages_with_limit_and_offset(
+    librarian: TestClient, history: dict[str, dict]
+) -> None:
+    page = my_loans(librarian, limit=1, offset=1).json()
+
+    assert [loan["id"] for loan in page["items"]] == [history["alpha"]["id"]]
+    assert page["total"] == 2
+
+
+def test_my_loans_keeps_loans_of_retired_books(
+    librarian: TestClient, history: dict[str, dict]
+) -> None:
+    assert login(librarian, "librarian@example.com") == 204
+    assert librarian.delete(f"/api/books/{history['alpha']['book_id']}").status_code < 300
+    assert login(librarian, READER) == 204
+
+    titles = [loan["book_title"] for loan in my_loans(librarian).json()["items"]]
+
+    assert "Alpha" in titles
+
+
+def test_my_loans_is_empty_for_a_member_who_never_borrowed(
+    client: TestClient, settings: Settings
+) -> None:
+    sign_in_as(client, settings, Role.MEMBER)
+
+    assert my_loans(client).json() == {"items": [], "total": 0}
+
+
+def test_my_loans_is_401_when_signed_out(client: TestClient) -> None:
+    assert my_loans(client).status_code == 401
+
+
+@pytest.mark.parametrize("role", [Role.LIBRARIAN, Role.ADMIN])
+def test_my_loans_is_403_for_staff(client: TestClient, settings: Settings, role: Role) -> None:
+    sign_in_as(client, settings, role)
+
+    assert my_loans(client).status_code == 403

@@ -12,6 +12,7 @@ export function NavBar() {
         <NavLink to="/" end>
           Catalogue
         </NavLink>
+        {can('view_own_loans') && <NavLink to="/history">My loans</NavLink>}
         {can('lend_books') && <NavLink to="/staff">Lending</NavLink>}
         {can('manage_staff') && <NavLink to="/admin">Staff accounts</NavLink>}
       </div>

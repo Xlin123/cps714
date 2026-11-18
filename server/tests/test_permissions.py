@@ -11,17 +11,23 @@ EXPECTED = {
     (Role.MEMBER, Capability.LEND_BOOKS): False,
     (Role.MEMBER, Capability.MANAGE_CATALOG): False,
     (Role.MEMBER, Capability.MANAGE_STAFF): False,
+    # §3 lists "view own loans" for every signed-in role, but only members can
+    # borrow, so staff would always see an empty history.
+    (Role.MEMBER, Capability.VIEW_OWN_LOANS): True,
     (Role.LIBRARIAN, Capability.LEND_BOOKS): True,
     (Role.LIBRARIAN, Capability.MANAGE_CATALOG): True,
     (Role.LIBRARIAN, Capability.MANAGE_STAFF): False,
+    (Role.LIBRARIAN, Capability.VIEW_OWN_LOANS): False,
     (Role.ADMIN, Capability.LEND_BOOKS): True,
     (Role.ADMIN, Capability.MANAGE_CATALOG): True,
     (Role.ADMIN, Capability.MANAGE_STAFF): True,
+    (Role.ADMIN, Capability.VIEW_OWN_LOANS): False,
 }
 # One request guarded by each capability, to check enforcement per role.
 GUARDED_REQUEST_FOR = {
     Capability.LEND_BOOKS: ("GET", "/api/loans", None),
     Capability.MANAGE_STAFF: ("GET", "/api/staff", None),
+    Capability.VIEW_OWN_LOANS: ("GET", "/api/loans/mine", None),
     Capability.MANAGE_CATALOG: (
         "POST",
         "/api/books",

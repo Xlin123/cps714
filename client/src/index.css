@@ -75,6 +75,9 @@ h2 {
 
 h1 {
   font-size: 56px;
+  /* Unitless, so it scales with the font; the root's 145% resolves to a fixed
+     26px that a 56px heading overflows. */
+  line-height: 1.1;
   letter-spacing: -1.68px;
   margin: 32px 0;
   @media (max-width: 1024px) {

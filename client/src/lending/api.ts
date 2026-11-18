@@ -13,6 +13,9 @@ export interface Loan {
   returned_at: string | null;
 }
 
+/** Which loans a history shows: still out, back, or both. */
+export type LoanStatus = 'all' | 'active' | 'returned';
+
 export interface LoanPage {
   items: Loan[];
   total: number;
@@ -42,4 +45,17 @@ export async function fetchActiveLoans(): Promise<LoanPage> {
 export async function checkIn(loanId: number): Promise<Loan> {
   const res = await send(`/api/loans/${loanId}/return`, { method: 'POST' }, 'Check-in failed.');
   return res.json();
+}
+
+/** Page size for the borrowing history; the server rejects anything above 100. */
+export const HISTORY_PAGE_SIZE = 50;
+
+/** The signed-in member's own loans, most recently checked out first. */
+export async function fetchMyLoans(status: LoanStatus, offset: number): Promise<LoanPage> {
+  const query = new URLSearchParams({
+    status,
+    limit: String(HISTORY_PAGE_SIZE),
+    offset: String(offset),
+  });
+  return getJson<LoanPage>(`/api/loans/mine?${query}`);
 }

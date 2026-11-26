@@ -436,3 +436,40 @@
 .navbar .error {
   color: var(--danger);
 }
+
+/* Headline numbers: a wrapping row of tiles. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.stat-tile.attention {
+  border-left: 4px solid var(--danger);
+}
+
+.stat-label {
+  font-size: 14px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-h);
+}
+
+.catalog .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

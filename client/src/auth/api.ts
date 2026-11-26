@@ -9,7 +9,8 @@ export type Capability =
   | 'manage_catalog'
   | 'view_own_loans'
   | 'view_members'
-  | 'place_holds';
+  | 'place_holds'
+  | 'view_dashboard';
 
 export interface SessionUser {
   id: string;

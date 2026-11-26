@@ -414,6 +414,40 @@ async def list_borrower_reminders(
     return MemberLoanPage(items=items, total=total or 0)
 
 
+async def list_overdue_loans(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    due_soon: timedelta,
+    fine_per_day_cents: int,
+    limit: int,
+    offset: int,
+) -> MemberLoanPage:
+    """One page of every member's overdue loans, longest overdue first.
+
+    Each carries its borrower and its fine so far.
+
+    Example::
+
+        page = await list_overdue_loans(
+            session, now=now_utc(), due_soon=timedelta(days=3), fine_per_day_cents=25,
+            limit=50, offset=0,
+        )
+    """
+    conditions = (Loan.returned_at.is_(None), Loan.due_at <= now)
+    total = await session.scalar(select(func.count()).select_from(Loan).where(*conditions))
+    rows = await session.execute(
+        _loan_rows().where(*conditions).order_by(Loan.due_at, Loan.id).limit(limit).offset(offset)
+    )
+    items = [
+        _to_member_loan_read(
+            *row, now=now, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents
+        )
+        for row in rows
+    ]
+    return MemberLoanPage(items=items, total=total or 0)
+
+
 def _http_error(refused: LoanRefused) -> HTTPException:
     return HTTPException(status_code=_REFUSAL_STATUS[refused.refusal], detail=refused.refusal.value)
 

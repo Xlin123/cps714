@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { Capability } from './auth/api';
 import { useAuth } from './auth/useAuth';
 import { CatalogPage } from './catalog/CatalogPage';
+import { DashboardPage } from './dashboard/DashboardPage';
 import { HistoryPage } from './lending/HistoryPage';
 import { LendingPage } from './lending/LendingPage';
 import { MemberProfilePage } from './members/MemberProfilePage';
@@ -81,6 +82,14 @@ function App() {
           element={
             <RequireCapability capability="view_own_loans">
               <HistoryPage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <RequireCapability capability="view_dashboard">
+              <DashboardPage />
             </RequireCapability>
           }
         />

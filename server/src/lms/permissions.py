@@ -25,6 +25,7 @@ class Capability(StrEnum):
     VIEW_OWN_LOANS = "view_own_loans"
     VIEW_MEMBERS = "view_members"
     PLACE_HOLDS = "place_holds"
+    VIEW_DASHBOARD = "view_dashboard"
 
 
 ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
@@ -33,7 +34,12 @@ ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
         # history or can queue for a book.
         Role.MEMBER: frozenset({Capability.VIEW_OWN_LOANS, Capability.PLACE_HOLDS}),
         Role.LIBRARIAN: frozenset(
-            {Capability.LEND_BOOKS, Capability.MANAGE_CATALOG, Capability.VIEW_MEMBERS}
+            {
+                Capability.LEND_BOOKS,
+                Capability.MANAGE_CATALOG,
+                Capability.VIEW_MEMBERS,
+                Capability.VIEW_DASHBOARD,
+            }
         ),
         Role.ADMIN: frozenset(
             {
@@ -41,6 +47,7 @@ ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
                 Capability.MANAGE_STAFF,
                 Capability.MANAGE_CATALOG,
                 Capability.VIEW_MEMBERS,
+                Capability.VIEW_DASHBOARD,
             }
         ),
     }

@@ -43,6 +43,7 @@ export function NavBar() {
           Catalogue
         </NavLink>
         {can('view_own_loans') && <MyLoansLink />}
+        {can('view_dashboard') && <NavLink to="/dashboard">Dashboard</NavLink>}
         {can('lend_books') && <NavLink to="/staff">Lending</NavLink>}
         {can('view_members') && <NavLink to="/members">Members</NavLink>}
         {can('manage_staff') && <NavLink to="/admin">Staff accounts</NavLink>}

@@ -14,6 +14,7 @@ from starlette.types import Scope
 
 from lms.auth import Auth
 from lms.catalog import catalog_router
+from lms.dashboard import dashboard_router
 from lms.database import Database
 from lms.demo import demo_router, seed_demo_accounts, seed_demo_books
 from lms.holds import holds_router
@@ -109,6 +110,7 @@ def create_app(
         members_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
         staff_router(database, auth),
         holds_router(database, auth),
+        dashboard_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
     ):
         app.include_router(feature_router)
     if is_demo_data_enabled:

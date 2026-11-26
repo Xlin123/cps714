@@ -41,6 +41,7 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 | `view_own_loans` | member           | `/history` (My loans), `/api/loans/mine` |
 | `view_members`   | librarian, admin | `/members` (Members), `/api/members`    |
 | `place_holds`    | member           | `/` (Place hold), `/history` (Holds), `/api/holds` |
+| `view_dashboard` | librarian, admin | `/dashboard` (Dashboard), `/api/dashboard` |
 
 ## Catalog
 
@@ -100,6 +101,10 @@ Requires `view_members`. The Members page (`/members`) searches member accounts;
 | GET    | `/api/members/{id}/loans?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's loans, same shape as `/api/loans/mine` |
 
 Staff accounts are never returned: an unknown id or a staff id gives `MEMBER_NOT_FOUND` (404). See `docs/members/decisions.md`.
+
+## Dashboard
+
+Requires `view_dashboard`. `GET /api/dashboard` returns `counts` (titles, copies, on loan, overdue, holds waiting, active members), the five `most_borrowed` books of all time, and `overdue`: up to 100 overdue loans, longest overdue first, each with its borrower and `fine_cents` (same shape as `/api/loans/mine`). The Dashboard page (`/dashboard`) shows them as tiles and tables, linking each borrower to their profile. See `docs/dashboard/decisions.md`.
 
 ## Staff accounts
 

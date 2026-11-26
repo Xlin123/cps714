@@ -10,7 +10,8 @@ export type Capability =
   | 'view_own_loans'
   | 'view_members'
   | 'place_holds'
-  | 'view_dashboard';
+  | 'view_dashboard'
+  | 'view_reports';
 
 export interface SessionUser {
   id: string;

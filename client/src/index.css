@@ -11,6 +11,8 @@
   --danger: #c0392b;
   --warning: #b45309;
   --success: #15803d;
+  /* Single-series chart marks; validated against --bg for each mode. */
+  --chart: #aa3bff;
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -47,6 +49,7 @@
     --danger: #f87171;
     --warning: #fbbf24;
     --success: #4ade80;
+    --chart: #b06cf9;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }

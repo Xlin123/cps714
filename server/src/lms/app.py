@@ -21,6 +21,7 @@ from lms.holds import holds_router
 from lms.loans import loans_router
 from lms.members import members_router
 from lms.models import User
+from lms.reports import reports_router
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
 from lms.staff import staff_router
@@ -111,6 +112,7 @@ def create_app(
         staff_router(database, auth),
         holds_router(database, auth),
         dashboard_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
+        reports_router(database, auth),
     ):
         app.include_router(feature_router)
     if is_demo_data_enabled:

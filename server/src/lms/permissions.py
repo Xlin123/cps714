@@ -26,6 +26,7 @@ class Capability(StrEnum):
     VIEW_MEMBERS = "view_members"
     PLACE_HOLDS = "place_holds"
     VIEW_DASHBOARD = "view_dashboard"
+    VIEW_REPORTS = "view_reports"
 
 
 ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
@@ -48,6 +49,7 @@ ROLE_CAPABILITIES: Mapping[Role, frozenset[Capability]] = MappingProxyType(
                 Capability.MANAGE_CATALOG,
                 Capability.VIEW_MEMBERS,
                 Capability.VIEW_DASHBOARD,
+                Capability.VIEW_REPORTS,
             }
         ),
     }

@@ -10,6 +10,7 @@ import { MemberProfilePage } from './members/MemberProfilePage';
 import { MembersPage } from './members/MembersPage';
 import { NavBar } from './components/NavBar';
 import { LoginPage } from './pages/LoginPage';
+import { ReportsPage } from './reports/ReportsPage';
 import { StaffPage } from './staff/StaffPage';
 import { RegisterPage } from './pages/RegisterPage';
 import './App.css';
@@ -114,6 +115,14 @@ function App() {
           element={
             <RequireCapability capability="view_members">
               <MemberProfilePage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RequireCapability capability="view_reports">
+              <ReportsPage />
             </RequireCapability>
           }
         />

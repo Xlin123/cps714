@@ -42,6 +42,7 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 | `view_members`   | librarian, admin | `/members` (Members), `/api/members`    |
 | `place_holds`    | member           | `/` (Place hold), `/history` (Holds), `/api/holds` |
 | `view_dashboard` | librarian, admin | `/dashboard` (Dashboard), `/api/dashboard` |
+| `view_reports`   | admin            | `/reports` (Reports), `/api/reports`    |
 
 ## Catalog
 
@@ -105,6 +106,10 @@ Staff accounts are never returned: an unknown id or a staff id gives `MEMBER_NOT
 ## Dashboard
 
 Requires `view_dashboard`. `GET /api/dashboard` returns `counts` (titles, copies, on loan, overdue, holds waiting, active members), the five `most_borrowed` books of all time, and `overdue`: up to 100 overdue loans, longest overdue first, each with its borrower and `fine_cents` (same shape as `/api/loans/mine`). The Dashboard page (`/dashboard`) shows them as tiles and tables, linking each borrower to their profile. See `docs/dashboard/decisions.md`.
+
+## Reports
+
+Requires `view_reports` (admin). `GET /api/reports?weeks=12` (1-52) covers the last `weeks` weeks, Monday to Sunday in UTC, the current week included. It returns `totals` (loans, distinct borrowers), `loans_per_week` with empty weeks as 0, and the ten `popular_titles` and five `popular_categories` by loans in the period. The Reports page (`/reports`) offers 4, 12, 26 and 52 weeks and draws loans per week as a column chart (with a table view) and the rankings as bars. See `docs/reports/decisions.md`.
 
 ## Staff accounts
 

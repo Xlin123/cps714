@@ -473,3 +473,124 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* Charts: thin marks in --chart, hairline recessive grid, text in text tokens. */
+.chart {
+  position: relative;
+  max-width: 760px;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  stroke: var(--text);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--text);
+  font-size: 12px;
+}
+
+.chart-hit {
+  fill: transparent;
+}
+
+.chart-mark {
+  fill: var(--chart);
+}
+
+.chart-column {
+  outline: none;
+}
+
+.chart-column.active .chart-hit {
+  fill: var(--accent-bg);
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.chart-tooltip strong {
+  color: var(--text-h);
+  font-size: 16px;
+}
+
+.chart-table {
+  margin: 8px 0 24px;
+}
+
+.report-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bar-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bar-label {
+  color: var(--text-h);
+  font-size: 15px;
+}
+
+.bar-detail {
+  color: var(--text);
+}
+
+.bar-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bar-fill {
+  height: 16px;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--chart);
+}
+
+.bar-list li:hover .bar-fill {
+  opacity: 0.8;
+}
+
+.bar-value {
+  color: var(--text-h);
+  font-size: 14px;
+  font-weight: 600;
+}

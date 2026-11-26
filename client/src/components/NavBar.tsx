@@ -47,6 +47,7 @@ export function NavBar() {
         {can('lend_books') && <NavLink to="/staff">Lending</NavLink>}
         {can('view_members') && <NavLink to="/members">Members</NavLink>}
         {can('manage_staff') && <NavLink to="/admin">Staff accounts</NavLink>}
+        {can('view_reports') && <NavLink to="/reports">Reports</NavLink>}
       </div>
       <div className="navbar-account">
         {user ? (

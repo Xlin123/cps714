@@ -3,12 +3,14 @@ import type { ReactNode } from 'react';
 import type { Capability } from './auth/api';
 import { useAuth } from './auth/useAuth';
 import { CatalogPage } from './catalog/CatalogPage';
+import { DashboardPage } from './dashboard/DashboardPage';
 import { HistoryPage } from './lending/HistoryPage';
 import { LendingPage } from './lending/LendingPage';
 import { MemberProfilePage } from './members/MemberProfilePage';
 import { MembersPage } from './members/MembersPage';
 import { NavBar } from './components/NavBar';
 import { LoginPage } from './pages/LoginPage';
+import { ReportsPage } from './reports/ReportsPage';
 import { StaffPage } from './staff/StaffPage';
 import { RegisterPage } from './pages/RegisterPage';
 import './App.css';
@@ -85,6 +87,14 @@ function App() {
           }
         />
         <Route
+          path="/dashboard"
+          element={
+            <RequireCapability capability="view_dashboard">
+              <DashboardPage />
+            </RequireCapability>
+          }
+        />
+        <Route
           path="/staff"
           element={
             <RequireCapability capability="lend_books">
@@ -105,6 +115,14 @@ function App() {
           element={
             <RequireCapability capability="view_members">
               <MemberProfilePage />
+            </RequireCapability>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RequireCapability capability="view_reports">
+              <ReportsPage />
             </RequireCapability>
           }
         />

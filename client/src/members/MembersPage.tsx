@@ -19,7 +19,7 @@ export function MembersPage() {
   return (
     <div className="page wide">
       <h1>Members</h1>
-      <form className="member-search" role="search" onSubmit={onSubmit}>
+      <form className="search-form" role="search" onSubmit={onSubmit}>
         <label htmlFor="member-query">Name or email</label>
         <input
           id="member-query"

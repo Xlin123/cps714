@@ -8,7 +8,10 @@ export type Capability =
   | 'manage_staff'
   | 'manage_catalog'
   | 'view_own_loans'
-  | 'view_members';
+  | 'view_members'
+  | 'place_holds'
+  | 'view_dashboard'
+  | 'view_reports';
 
 export interface SessionUser {
   id: string;

@@ -6,7 +6,7 @@ from lms.app import create_app
 from lms.auth import Auth
 from lms.database import Database
 from lms.settings import Settings
-from tests.conftest import DUE_SOON, LOAN_PERIOD
+from tests.conftest import DUE_SOON, FINE_PER_DAY_CENTS, LOAN_PERIOD
 
 
 def test_client_routes_fall_back_to_index_but_api_paths_do_not(
@@ -23,6 +23,7 @@ def test_client_routes_fall_back_to_index_but_api_paths_do_not(
         is_demo_data_enabled=False,
         loan_period=LOAN_PERIOD,
         due_soon=DUE_SOON,
+        fine_per_day_cents=FINE_PER_DAY_CENTS,
     )
 
     with TestClient(app) as client:

@@ -1,22 +1,48 @@
 import { Fragment, useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { ActionButton } from '../components/ActionButton';
+import { fetchMyHolds, placeHold } from '../holds/api';
 import { useLoad } from '../hooks/useLoad';
 import { BookEditForm } from './BookEditForm';
 import { EditBookButton } from './EditBookButton';
-import { fetchBooks, PAGE_SIZE } from './api';
+import { fetchBooks, PAGE_SIZE, SEARCH_MAX_LENGTH } from './api';
 import type { Book } from './api';
 
+/** True when every shelf copy is out or reserved, so a member must queue. */
+const mustQueue = (book: Book) => book.available_copies <= book.on_hold;
+
 function availability(book: Book): string {
-  if (!book.is_available) return 'Unavailable';
-  return `${book.available_copies} of ${book.total_copies} available`;
+  const queue = book.on_hold > 0 ? ` · ${book.on_hold} on hold` : '';
+  if (!book.is_available) return `Unavailable${queue}`;
+  if (mustQueue(book)) return `Reserved for holds${queue}`;
+  return `${book.available_copies} of ${book.total_copies} available${queue}`;
 }
 
 export function CatalogPage() {
   const { user } = useAuth();
+  const [draft, setDraft] = useState('');
+  const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
-  const { state, reload } = useLoad(() => fetchBooks(offset), [offset]);
+  const [heldTitle, setHeldTitle] = useState<string | null>(null);
+  const { state, reload } = useLoad(() => fetchBooks(query, offset), [query, offset]);
+  const canPlaceHolds = user?.capabilities.includes('place_holds') ?? false;
+  const myHolds = useLoad(
+    async () => (canPlaceHolds ? (await fetchMyHolds()).items : []),
+    [canPlaceHolds],
+  );
+  const heldBookIds = new Set(
+    myHolds.state.status === 'loaded' ? myHolds.state.data.map((hold) => hold.book_id) : [],
+  );
+
+  function onSearch(event: FormEvent) {
+    event.preventDefault();
+    setQuery(draft.trim());
+    setOffset(0);
+    setEditingBook(null);
+  }
 
   if (state.status === 'failed') {
     return <div className="page error">Could not load the catalogue: {state.error}</div>;
@@ -25,6 +51,7 @@ export function CatalogPage() {
 
   const page = state.data;
   const canManageCatalog = user?.capabilities.includes('manage_catalog') ?? false;
+  const hasActionColumn = canManageCatalog || canPlaceHolds;
   const hasPrevious = offset > 0;
   const hasNext = offset + PAGE_SIZE < page.total;
 
@@ -38,8 +65,24 @@ export function CatalogPage() {
           </Link>
         )}
       </div>
+      <form className="search-form" role="search" onSubmit={onSearch}>
+        <label htmlFor="catalog-query">Title, author or keyword</label>
+        <input
+          id="catalog-query"
+          type="search"
+          maxLength={SEARCH_MAX_LENGTH}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit">Search</button>
+      </form>
+      {heldTitle && (
+        <p role="status">
+          Hold placed on {heldTitle}. Track it under <Link to="/history">My loans</Link>.
+        </p>
+      )}
       {page.total === 0 ? (
-        <p>No books in the catalogue yet.</p>
+        <p>{query ? `No books match “${query}”.` : 'No books in the catalogue yet.'}</p>
       ) : (
         <>
           <div className="table-scroll">
@@ -52,7 +95,7 @@ export function CatalogPage() {
                     Category
                   </th>
                   <th scope="col">Availability</th>
-                  {canManageCatalog && (
+                  {hasActionColumn && (
                     <th scope="col" className="action-column">
                       <span className="visually-hidden">Action</span>
                     </th>
@@ -77,10 +120,28 @@ export function CatalogPage() {
                           />
                         </td>
                       )}
+                      {canPlaceHolds && (
+                        <td>
+                          {heldBookIds.has(book.id) && <Link to="/history">On hold</Link>}
+                          {!heldBookIds.has(book.id) && mustQueue(book) && (
+                            <ActionButton
+                              label="Place hold"
+                              busyLabel="Placing…"
+                              accessibleLabel={`Place hold on ${book.title}`}
+                              action={async () => {
+                                await placeHold(book.id);
+                                setHeldTitle(book.title);
+                                reload();
+                                myHolds.reload();
+                              }}
+                            />
+                          )}
+                        </td>
+                      )}
                     </tr>
                     {editingBook?.id === book.id && (
                       <tr className="edit-row">
-                        <td colSpan={canManageCatalog ? 5 : 4}>
+                        <td colSpan={hasActionColumn ? 5 : 4}>
                           <BookEditForm
                             key={editingBook.id}
                             book={editingBook}

@@ -14,11 +14,14 @@ from starlette.types import Scope
 
 from lms.auth import Auth
 from lms.catalog import catalog_router
+from lms.dashboard import dashboard_router
 from lms.database import Database
 from lms.demo import demo_router, seed_demo_accounts, seed_demo_books
+from lms.holds import holds_router
 from lms.loans import loans_router
 from lms.members import members_router
 from lms.models import User
+from lms.reports import reports_router
 from lms.schemas import UserCreate, UserRead
 from lms.settings import Settings
 from lms.staff import staff_router
@@ -64,6 +67,7 @@ def create_app(
     is_demo_data_enabled: bool,
     loan_period: timedelta,
     due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> FastAPI:
     """Build the app. The app takes ownership of ``database`` and disposes it on shutdown.
 
@@ -77,6 +81,7 @@ def create_app(
             is_demo_data_enabled=settings.is_demo_data_enabled,
             loan_period=timedelta(days=settings.loan_period_days),
             due_soon=timedelta(days=settings.due_soon_days),
+            fine_per_day_cents=settings.fine_per_day_cents,
         )
     """
 
@@ -96,9 +101,18 @@ def create_app(
     # Each feature router takes only what it needs; add new features here.
     for feature_router in (
         catalog_router(database, auth),
-        loans_router(database, auth, loan_period=loan_period, due_soon=due_soon),
-        members_router(database, auth, due_soon=due_soon),
+        loans_router(
+            database,
+            auth,
+            loan_period=loan_period,
+            due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
+        ),
+        members_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
         staff_router(database, auth),
+        holds_router(database, auth),
+        dashboard_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
+        reports_router(database, auth),
     ):
         app.include_router(feature_router)
     if is_demo_data_enabled:
@@ -124,4 +138,5 @@ def app_from_env() -> FastAPI:
         is_demo_data_enabled=settings.is_demo_data_enabled,
         loan_period=timedelta(days=settings.loan_period_days),
         due_soon=timedelta(days=settings.due_soon_days),
+        fine_per_day_cents=settings.fine_per_day_cents,
     )

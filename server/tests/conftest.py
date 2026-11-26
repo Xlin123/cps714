@@ -18,6 +18,7 @@ from lms.settings import Settings
 PASSWORD = "correct horse battery"
 LOAN_PERIOD = timedelta(days=14)
 DUE_SOON = timedelta(days=3)
+FINE_PER_DAY_CENTS = 25
 
 
 @pytest.fixture
@@ -39,6 +40,7 @@ def auth_and_app(settings: Settings) -> tuple[Auth, FastAPI]:
         is_demo_data_enabled=False,
         loan_period=LOAN_PERIOD,
         due_soon=DUE_SOON,
+        fine_per_day_cents=FINE_PER_DAY_CENTS,
     )
     return auth, app
 
@@ -92,11 +94,18 @@ def add_books(settings: Settings, books: list[Book]) -> None:
     asyncio.run(run())
 
 
-def book(title: str, *, copies: int = 1, isbn: str | None = None) -> Book:
+def book(
+    title: str,
+    *,
+    copies: int = 1,
+    isbn: str | None = None,
+    author: str = "Author",
+    category: str = "Fiction",
+) -> Book:
     return Book(
         title=title,
-        author="Author",
+        author=author,
         isbn=isbn or f"isbn-{title}",
-        category="Fiction",
+        category=category,
         total_copies=copies,
     )

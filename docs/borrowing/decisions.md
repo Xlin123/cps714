@@ -94,3 +94,36 @@ no email, push or device notifications.
 storing them on the server would need a new table. A bell-and-dropdown
 becomes worthwhile once there are other notification types (e.g. holds,
 LMS-16).
+
+## 2026-11-25: Overdue fines (LMS-17; #18, #67–#69)
+
+**Context.** Late returns should accrue a fine at a configurable daily rate.
+Collecting payment is a non-goal (`docs/REQUIREMENTS.md` section 2). #68 asked
+for an admin-configurable rate.
+
+**Options for the rate.**
+
+| Option | Notes |
+|---|---|
+| `LMS_FINE_PER_DAY_CENTS` environment variable | Same as the loan period and due-soon window; changed by restarting. |
+| Settings table and admin page | Changeable live by an admin; needs a new table, API and page. |
+
+**Decision.**
+
+- The rate is `LMS_FINE_PER_DAY_CENTS` (default 25, 0 turns fines off),
+  chosen by the team. Money is whole cents, never floats.
+- Fines are computed when requested, by `lms/fines.py`, from `due_at`,
+  `returned_at` and the server clock; nothing is stored. Each started day
+  past `due_at` costs the daily rate, so one second late is one day. A loan
+  still out keeps accruing; a returned loan's fine stops at `returned_at`.
+- Members see a fine per loan and their total on My loans
+  (`GET /api/loans/mine/fines`); staff see the same per-loan fines and a
+  total (`fines_cents`) on the member profile.
+- `loans.py` and `members.py` depend on `fines.py`, never the reverse.
+
+**Consequences.**
+
+- Changing the rate rewrites every fine, past ones included, because fines
+  are not stored. Freezing a fine at return would need a column on `loan`.
+- There is no "paid" or "waived" state; that arrives with fine collection.
+- The rate is not editable in the app (F2 "system settings" is not built).

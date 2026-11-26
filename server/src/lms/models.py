@@ -1,4 +1,4 @@
-"""SQLAlchemy tables for accounts, login sessions, the catalog and loans."""
+"""SQLAlchemy tables for accounts, login sessions, the catalog, loans and holds."""
 
 import uuid
 from datetime import datetime
@@ -92,3 +92,34 @@ class Loan(Base):
     due_at: Mapped[datetime] = mapped_column(TIMESTAMPAware(timezone=True), nullable=False)
     returned_at: Mapped[datetime | None] = mapped_column(TIMESTAMPAware(timezone=True))
     returned_to_id: Mapped[uuid.UUID | None] = mapped_column(GUID, ForeignKey("user.id"))
+
+
+class Hold(Base):
+    """A member's place in the queue for a book with no free copy.
+
+    Active until ``fulfilled_at`` (the member borrowed the book) or
+    ``cancelled_at`` is set. Queue order is ``id``: rows are never deleted, so
+    ids only grow. A member may hold at most one active hold per book.
+    """
+
+    __tablename__ = "hold"
+    __table_args__ = (
+        Index(
+            "one_active_hold_per_member_and_book",
+            "book_id",
+            "member_id",
+            unique=True,
+            sqlite_where=text("fulfilled_at IS NULL AND cancelled_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    book_id: Mapped[int] = mapped_column(
+        ForeignKey("book.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    member_id: Mapped[uuid.UUID] = mapped_column(
+        GUID, ForeignKey("user.id"), nullable=False, index=True
+    )
+    placed_at: Mapped[datetime] = mapped_column(TIMESTAMPAware(timezone=True), nullable=False)
+    fulfilled_at: Mapped[datetime | None] = mapped_column(TIMESTAMPAware(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(TIMESTAMPAware(timezone=True))

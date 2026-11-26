@@ -25,6 +25,18 @@ EXPECTED = {
     (Role.MEMBER, Capability.VIEW_MEMBERS): False,
     (Role.LIBRARIAN, Capability.VIEW_MEMBERS): True,
     (Role.ADMIN, Capability.VIEW_MEMBERS): True,
+    # §3 has no row for holds (LMS-16); only members borrow, so only they queue.
+    (Role.MEMBER, Capability.PLACE_HOLDS): True,
+    (Role.LIBRARIAN, Capability.PLACE_HOLDS): False,
+    (Role.ADMIN, Capability.PLACE_HOLDS): False,
+    # §3 has no row for the dashboard (LMS-19); it is a librarian tool.
+    (Role.MEMBER, Capability.VIEW_DASHBOARD): False,
+    (Role.LIBRARIAN, Capability.VIEW_DASHBOARD): True,
+    (Role.ADMIN, Capability.VIEW_DASHBOARD): True,
+    # §3 has no row for reports (LMS-20); the story gives them to admins.
+    (Role.MEMBER, Capability.VIEW_REPORTS): False,
+    (Role.LIBRARIAN, Capability.VIEW_REPORTS): False,
+    (Role.ADMIN, Capability.VIEW_REPORTS): True,
 }
 # One request guarded by each capability, to check enforcement per role.
 GUARDED_REQUEST_FOR = {
@@ -32,6 +44,9 @@ GUARDED_REQUEST_FOR = {
     Capability.MANAGE_STAFF: ("GET", "/api/staff", None),
     Capability.VIEW_OWN_LOANS: ("GET", "/api/loans/mine", None),
     Capability.VIEW_MEMBERS: ("GET", "/api/members", None),
+    Capability.PLACE_HOLDS: ("GET", "/api/holds/mine", None),
+    Capability.VIEW_DASHBOARD: ("GET", "/api/dashboard", None),
+    Capability.VIEW_REPORTS: ("GET", "/api/reports", None),
     Capability.MANAGE_CATALOG: (
         "POST",
         "/api/books",

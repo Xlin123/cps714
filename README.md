@@ -40,10 +40,13 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 | `manage_catalog` | librarian, admin | `/staff` (Add a book), `/api/books`     |
 | `view_own_loans` | member           | `/history` (My loans), `/api/loans/mine` |
 | `view_members`   | librarian, admin | `/members` (Members), `/api/members`    |
+| `place_holds`    | member           | `/` (Place hold), `/history` (Holds), `/api/holds` |
+| `view_dashboard` | librarian, admin | `/dashboard` (Dashboard), `/api/dashboard` |
+| `view_reports`   | admin            | `/reports` (Reports), `/api/reports`    |
 
 ## Catalog
 
-`GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1-100. The catalog page at `/` pages through it.
+`GET /api/books?q=&limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1-100. `q` (at most 100 characters) keeps only books whose title, author, ISBN or category contains it, ignoring case; `total` then counts the matches. The catalog page at `/` has a search bar and pages through the results.
 
 Every list endpoint pages the same way (`server/src/lms/paging.py`).
 
@@ -70,8 +73,23 @@ Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 | POST   | `/api/loans/{id}/return`   | -                                  | 200 with the returned loan |
 | GET    | `/api/loans/mine?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's own loans, newest first, each with `reminder` |
 | GET    | `/api/loans/mine/reminders` | -                                 | the member's overdue and due-soon loans (`LMS_DUE_SOON_DAYS`), soonest due first |
+| GET    | `/api/loans/mine/fines`    | -                                  | `{total_cents, per_day_cents}`: the member's fines across all loans |
 
-The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED`, `LOAN_RESERVED_FOR_HOLD` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+
+Every loan in `/api/loans/mine` and `/api/members/{id}/loans` carries `fine_cents`: each started day past its due date adds `LMS_FINE_PER_DAY_CENTS` (default 25; 0 turns fines off). A returned loan's fine stops at its return. Fines are shown, not collected. See `docs/borrowing/decisions.md`.
+
+## Holds
+
+Requires `place_holds` (member). A member can hold a book when no copy is free for them; the catalogue shows a Place hold button and each book's `on_hold` count. Holds queue in the order placed. When a copy comes back it is reserved for the first member in line: their hold shows "Ready for pickup" under Holds on My loans, and checkout to anyone else is refused with `LOAN_RESERVED_FOR_HOLD` until they borrow it or cancel. Borrowing fulfils the hold; removing a book cancels its holds.
+
+| Method | Path               | Body              | Result |
+|--------|--------------------|-------------------|--------|
+| POST   | `/api/holds`       | JSON `{book_id}`  | 201 with the hold's `position` and `is_ready` |
+| GET    | `/api/holds/mine`  | -                 | the member's active holds, oldest first |
+| DELETE | `/api/holds/{id}`  | -                 | 204; cancels one of the member's own holds |
+
+Refusals: `HOLD_BOOK_NOT_FOUND` and `HOLD_NOT_FOUND` (404); `HOLD_BOOK_AVAILABLE`, `HOLD_ALREADY_BORROWED` and `HOLD_ALREADY_PLACED` (409). See `docs/holds/decisions.md`.
 
 ## Members
 
@@ -80,10 +98,18 @@ Requires `view_members`. The Members page (`/members`) searches member accounts;
 | Method | Path                                    | Query                         | Result |
 |--------|-----------------------------------------|-------------------------------|--------|
 | GET    | `/api/members?q&limit&offset`           | `q`: name or email fragment, case-insensitive, at most 100 characters; empty lists everyone | member accounts (active and deactivated), by name |
-| GET    | `/api/members/{id}`                     | -                             | the member with `active_loans` and `total_loans` |
+| GET    | `/api/members/{id}`                     | -                             | the member with `active_loans`, `total_loans` and `fines_cents` |
 | GET    | `/api/members/{id}/loans?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's loans, same shape as `/api/loans/mine` |
 
 Staff accounts are never returned: an unknown id or a staff id gives `MEMBER_NOT_FOUND` (404). See `docs/members/decisions.md`.
+
+## Dashboard
+
+Requires `view_dashboard`. `GET /api/dashboard` returns `counts` (titles, copies, on loan, overdue, holds waiting, active members), the five `most_borrowed` books of all time, and `overdue`: up to 100 overdue loans, longest overdue first, each with its borrower and `fine_cents` (same shape as `/api/loans/mine`). The Dashboard page (`/dashboard`) shows them as tiles and tables, linking each borrower to their profile. See `docs/dashboard/decisions.md`.
+
+## Reports
+
+Requires `view_reports` (admin). `GET /api/reports?weeks=12` (1-52) covers the last `weeks` weeks, Monday to Sunday in UTC, the current week included. It returns `totals` (loans, distinct borrowers), `loans_per_week` with empty weeks as 0, and the ten `popular_titles` and five `popular_categories` by loans in the period. The Reports page (`/reports`) offers 4, 12, 26 and 52 weeks and draws loans per week as a column chart (with a table view) and the rankings as bars. See `docs/reports/decisions.md`.
 
 ## Staff accounts
 

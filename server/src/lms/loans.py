@@ -13,7 +13,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
+from lms.availability import active_loan_count
 from lms.database import Database
+from lms.fines import FineSummary, borrower_fines_cents, fine_cents
+from lms.holds import fulfil_hold, holds_ahead
 from lms.models import Book, Loan, User
 from lms.paging import PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, Limit, Offset
 from lms.permissions import Capability
@@ -29,6 +32,7 @@ class LoanRefusal(StrEnum):
     ALREADY_BORROWED = "LOAN_ALREADY_BORROWED"
     LOAN_NOT_FOUND = "LOAN_NOT_FOUND"
     ALREADY_RETURNED = "LOAN_ALREADY_RETURNED"
+    RESERVED_FOR_HOLD = "LOAN_RESERVED_FOR_HOLD"
 
 
 _REFUSAL_STATUS = {
@@ -38,6 +42,7 @@ _REFUSAL_STATUS = {
     LoanRefusal.ALREADY_BORROWED: status.HTTP_409_CONFLICT,
     LoanRefusal.LOAN_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     LoanRefusal.ALREADY_RETURNED: status.HTTP_409_CONFLICT,
+    LoanRefusal.RESERVED_FOR_HOLD: status.HTTP_409_CONFLICT,
 }
 
 
@@ -116,9 +121,10 @@ class LoanPage(BaseModel):
 
 
 class MemberLoanRead(LoanRead):
-    """A loan as its borrower sees it, with any reminder it warrants."""
+    """A loan as its borrower sees it, with any reminder and fine it warrants."""
 
     reminder: Reminder | None
+    fine_cents: int
 
 
 class MemberLoanPage(BaseModel):
@@ -137,15 +143,6 @@ async def find_borrower(session: AsyncSession, email: str) -> User | None:
     if user is None or not user.is_active or user.role is not Role.MEMBER:
         return None
     return user
-
-
-def _active_loan_count(book_id: object) -> object:
-    return (
-        select(func.count())
-        .select_from(Loan)
-        .where(Loan.book_id == book_id, Loan.returned_at.is_(None))
-        .scalar_subquery()
-    )
 
 
 async def _has_active_loan(session: AsyncSession, book_id: int, borrower_id: uuid.UUID) -> bool:
@@ -170,8 +167,10 @@ async def check_out(
 ) -> int:
     """Lend one copy of ``book_id`` to ``borrower`` and return the new loan's id.
 
-    Raises ``LoanRefused`` if the book is missing, the borrower already holds
-    it, or every copy is out.
+    Raises ``LoanRefused`` if the book is missing, the borrower already has
+    it, every copy is out, or the free copies are reserved for members ahead
+    of the borrower in the holds queue. A loan fulfils the borrower's own hold
+    on the book, if any.
 
     Example::
 
@@ -185,9 +184,9 @@ async def check_out(
     borrower_id = borrower.id
     librarian_id = librarian.id
     timestamp = TIMESTAMPAware(timezone=True)
-    # One INSERT … SELECT that only inserts while a copy is free, so two
-    # librarians racing for the last copy cannot both succeed: SQLite runs the
-    # count and the insert under one write lock.
+    # One INSERT … SELECT that only inserts while a copy is free for this
+    # borrower, so two librarians racing for the last copy cannot both
+    # succeed: SQLite runs the counts and the insert under one write lock.
     candidate = select(
         Book.id,
         literal(borrower_id, GUID),
@@ -197,7 +196,7 @@ async def check_out(
     ).where(
         Book.id == book_id,
         Book.retired_at.is_(None),
-        _active_loan_count(Book.id) < Book.total_copies,
+        active_loan_count(Book.id) + holds_ahead(book_id, borrower_id) < Book.total_copies,
     )
     statement = (
         insert(Loan)
@@ -215,6 +214,8 @@ async def check_out(
     )
     try:
         loan_id = (await session.execute(statement)).scalar_one_or_none()
+        if loan_id is not None:
+            await session.execute(fulfil_hold(book_id, borrower_id, now))
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -230,6 +231,9 @@ async def check_out(
     book = await session.get(Book, book_id)
     if book is None or book.retired_at is not None:
         raise LoanRefused(LoanRefusal.BOOK_NOT_FOUND)
+    on_loan = await session.scalar(select(active_loan_count(book_id)))
+    if (on_loan or 0) < book.total_copies:
+        raise LoanRefused(LoanRefusal.RESERVED_FOR_HOLD)
     raise LoanRefused(LoanRefusal.NO_COPIES_AVAILABLE)
 
 
@@ -313,12 +317,19 @@ def _to_member_loan_read(
     *,
     now: datetime,
     due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> MemberLoanRead:
     read = _to_loan_read(loan, book_title, borrower_name, borrower_email)
     reminder = reminder_for(
         due_at=read.due_at, returned_at=read.returned_at, now=now, due_soon=due_soon
     )
-    return MemberLoanRead(**read.model_dump(), reminder=reminder)
+    fine = fine_cents(
+        due_at=read.due_at,
+        returned_at=read.returned_at,
+        now=now,
+        per_day_cents=fine_per_day_cents,
+    )
+    return MemberLoanRead(**read.model_dump(), reminder=reminder, fine_cents=fine)
 
 
 async def list_borrower_loans(
@@ -330,6 +341,7 @@ async def list_borrower_loans(
     offset: int,
     now: datetime,
     due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> MemberLoanPage:
     """One page of ``borrower_id``'s loans, most recently checked out first.
 
@@ -339,7 +351,7 @@ async def list_borrower_loans(
 
         page = await list_borrower_loans(
             session, borrower_id=member.id, status=LoanStatus.RETURNED, limit=50, offset=0,
-            now=now_utc(), due_soon=timedelta(days=3),
+            now=now_utc(), due_soon=timedelta(days=3), fine_per_day_cents=25,
         )
     """
     conditions = [Loan.borrower_id == borrower_id]
@@ -355,12 +367,22 @@ async def list_borrower_loans(
         .limit(limit)
         .offset(offset)
     )
-    items = [_to_member_loan_read(*row, now=now, due_soon=due_soon) for row in rows]
+    items = [
+        _to_member_loan_read(
+            *row, now=now, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents
+        )
+        for row in rows
+    ]
     return MemberLoanPage(items=items, total=total or 0)
 
 
 async def list_borrower_reminders(
-    session: AsyncSession, *, borrower_id: uuid.UUID, now: datetime, due_soon: timedelta
+    session: AsyncSession,
+    *,
+    borrower_id: uuid.UUID,
+    now: datetime,
+    due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> MemberLoanPage:
     """``borrower_id``'s active loans that are overdue or due soon, soonest due first.
 
@@ -370,7 +392,8 @@ async def list_borrower_reminders(
     Example::
 
         reminders = await list_borrower_reminders(
-            session, borrower_id=member.id, now=now_utc(), due_soon=timedelta(days=3)
+            session, borrower_id=member.id, now=now_utc(), due_soon=timedelta(days=3),
+            fine_per_day_cents=25,
         )
     """
     conditions = [
@@ -382,7 +405,46 @@ async def list_borrower_reminders(
     rows = await session.execute(
         _loan_rows().where(*conditions).order_by(Loan.due_at, Loan.id).limit(PAGE_SIZE_MAX)
     )
-    items = [_to_member_loan_read(*row, now=now, due_soon=due_soon) for row in rows]
+    items = [
+        _to_member_loan_read(
+            *row, now=now, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents
+        )
+        for row in rows
+    ]
+    return MemberLoanPage(items=items, total=total or 0)
+
+
+async def list_overdue_loans(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    due_soon: timedelta,
+    fine_per_day_cents: int,
+    limit: int,
+    offset: int,
+) -> MemberLoanPage:
+    """One page of every member's overdue loans, longest overdue first.
+
+    Each carries its borrower and its fine so far.
+
+    Example::
+
+        page = await list_overdue_loans(
+            session, now=now_utc(), due_soon=timedelta(days=3), fine_per_day_cents=25,
+            limit=50, offset=0,
+        )
+    """
+    conditions = (Loan.returned_at.is_(None), Loan.due_at <= now)
+    total = await session.scalar(select(func.count()).select_from(Loan).where(*conditions))
+    rows = await session.execute(
+        _loan_rows().where(*conditions).order_by(Loan.due_at, Loan.id).limit(limit).offset(offset)
+    )
+    items = [
+        _to_member_loan_read(
+            *row, now=now, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents
+        )
+        for row in rows
+    ]
     return MemberLoanPage(items=items, total=total or 0)
 
 
@@ -391,19 +453,26 @@ def _http_error(refused: LoanRefused) -> HTTPException:
 
 
 def loans_router(
-    database: Database, auth: Auth, *, loan_period: timedelta, due_soon: timedelta
+    database: Database,
+    auth: Auth,
+    *,
+    loan_period: timedelta,
+    due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> APIRouter:
     """Router for checkout, check-in and loan lists.
 
     Lending routes need ``LEND_BOOKS``; the ``/api/loans/mine`` routes need
     ``VIEW_OWN_LOANS``. ``due_soon`` is how long before its due date a loan
-    starts showing a reminder.
+    starts showing a reminder; ``fine_per_day_cents`` is what each started
+    day overdue adds to its fine.
 
     Example::
 
         app.include_router(
             loans_router(
-                database, auth, loan_period=timedelta(days=14), due_soon=timedelta(days=3)
+                database, auth, loan_period=timedelta(days=14), due_soon=timedelta(days=3),
+                fine_per_day_cents=25,
             )
         )
     """
@@ -462,6 +531,7 @@ def loans_router(
             offset=offset,
             now=now_utc(),
             due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
         )
 
     @router.get("/mine/reminders", response_model=MemberLoanPage)
@@ -470,8 +540,22 @@ def loans_router(
         session: Annotated[AsyncSession, Depends(database.session)],
     ) -> MemberLoanPage:
         return await list_borrower_reminders(
-            session, borrower_id=borrower.id, now=now_utc(), due_soon=due_soon
+            session,
+            borrower_id=borrower.id,
+            now=now_utc(),
+            due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
         )
+
+    @router.get("/mine/fines", response_model=FineSummary)
+    async def my_fines(
+        borrower: Annotated[User, Depends(view_own)],
+        session: Annotated[AsyncSession, Depends(database.session)],
+    ) -> FineSummary:
+        total = await borrower_fines_cents(
+            session, borrower_id=borrower.id, now=now_utc(), per_day_cents=fine_per_day_cents
+        )
+        return FineSummary(total_cents=total, per_day_cents=fine_per_day_cents)
 
     @router.post("/{loan_id}/return", response_model=LoanRead)
     async def check_in(

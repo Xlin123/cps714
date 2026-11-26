@@ -1,25 +1,26 @@
 """Member lookup: librarians find a member and see their profile and loans."""
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_users_db_sqlalchemy.generics import now_utc
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
 from lms.database import Database
+from lms.fines import borrower_fines_cents
 from lms.loans import LoanStatus, MemberLoanPage, list_borrower_loans
 from lms.models import Loan, User
 from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 from lms.permissions import Capability
 from lms.roles import Role
+from lms.search import SearchQuery, contains_any
 
 MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND"
-QUERY_MAX_LENGTH = 100
 
 
 class MemberRead(BaseModel):
@@ -39,18 +40,15 @@ class MemberPage(BaseModel):
 
 
 class MemberProfile(MemberRead):
-    """A member with counts of their loans."""
+    """A member with counts of their loans and their accrued fines in cents."""
 
     active_loans: int
     total_loans: int
+    fines_cents: int
 
 
 def _to_member_read(user: User) -> MemberRead:
     return MemberRead(id=user.id, email=user.email, name=user.name, is_active=user.is_active)
-
-
-def _escape_like(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 async def search_members(
@@ -66,15 +64,7 @@ async def search_members(
 
         page = await search_members(session, query="ada", limit=50, offset=0)
     """
-    conditions = [User.role == Role.MEMBER]
-    if query:
-        pattern = f"%{_escape_like(query.lower())}%"
-        conditions.append(
-            or_(
-                func.lower(User.name).like(pattern, escape="\\"),
-                func.lower(User.email).like(pattern, escape="\\"),
-            )
-        )
+    conditions = [User.role == Role.MEMBER, contains_any(query, User.name, User.email)]
     total = await session.scalar(select(func.count()).select_from(User).where(*conditions))
     users = await session.scalars(
         select(User).where(*conditions).order_by(User.name, User.email).limit(limit).offset(offset)
@@ -90,12 +80,14 @@ async def find_member(session: AsyncSession, member_id: uuid.UUID) -> User | Non
     return user
 
 
-async def member_profile(session: AsyncSession, member: User) -> MemberProfile:
-    """``member``'s details with counts of their active and all-time loans.
+async def member_profile(
+    session: AsyncSession, member: User, *, now: datetime, fine_per_day_cents: int
+) -> MemberProfile:
+    """``member``'s details with loan counts and fines accrued by ``now``.
 
     Example::
 
-        profile = await member_profile(session, member)
+        profile = await member_profile(session, member, now=now_utc(), fine_per_day_cents=25)
     """
     is_active = func.count().filter(Loan.returned_at.is_(None))
     active, total = (
@@ -103,20 +95,30 @@ async def member_profile(session: AsyncSession, member: User) -> MemberProfile:
             select(is_active, func.count()).select_from(Loan).where(Loan.borrower_id == member.id)
         )
     ).one()
+    fines = await borrower_fines_cents(
+        session, borrower_id=member.id, now=now, per_day_cents=fine_per_day_cents
+    )
     return MemberProfile(
-        **_to_member_read(member).model_dump(), active_loans=active, total_loans=total
+        **_to_member_read(member).model_dump(),
+        active_loans=active,
+        total_loans=total,
+        fines_cents=fines,
     )
 
 
-def members_router(database: Database, auth: Auth, *, due_soon: timedelta) -> APIRouter:
+def members_router(
+    database: Database, auth: Auth, *, due_soon: timedelta, fine_per_day_cents: int
+) -> APIRouter:
     """Router for ``/api/members``. Needs ``VIEW_MEMBERS``.
 
-    ``due_soon`` is how long before its due date a loan is flagged, matching
-    what the member sees on their own history.
+    ``due_soon`` and ``fine_per_day_cents`` match what the member sees on
+    their own history.
 
     Example::
 
-        app.include_router(members_router(database, auth, due_soon=timedelta(days=3)))
+        app.include_router(
+            members_router(database, auth, due_soon=timedelta(days=3), fine_per_day_cents=25)
+        )
     """
     router = APIRouter(prefix="/api/members", tags=["members"])
     view = auth.require_capability(Capability.VIEW_MEMBERS)
@@ -131,7 +133,7 @@ def members_router(database: Database, auth: Auth, *, due_soon: timedelta) -> AP
     async def members(
         _: Annotated[User, Depends(view)],
         session: Annotated[AsyncSession, Depends(database.session)],
-        q: Annotated[str, Query(max_length=QUERY_MAX_LENGTH)] = "",
+        q: SearchQuery = "",
         limit: Limit = PAGE_SIZE_DEFAULT,
         offset: Offset = 0,
     ) -> MemberPage:
@@ -143,7 +145,10 @@ def members_router(database: Database, auth: Auth, *, due_soon: timedelta) -> AP
         _: Annotated[User, Depends(view)],
         session: Annotated[AsyncSession, Depends(database.session)],
     ) -> MemberProfile:
-        return await member_profile(session, await member_or_404(session, member_id))
+        member = await member_or_404(session, member_id)
+        return await member_profile(
+            session, member, now=now_utc(), fine_per_day_cents=fine_per_day_cents
+        )
 
     @router.get("/{member_id}/loans", response_model=MemberLoanPage)
     async def loans(
@@ -163,6 +168,7 @@ def members_router(database: Database, auth: Auth, *, due_soon: timedelta) -> AP
             offset=offset,
             now=now_utc(),
             due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
         )
 
     return router

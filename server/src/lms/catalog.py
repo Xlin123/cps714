@@ -10,7 +10,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
+from lms.availability import active_hold_count
 from lms.database import Database
+from lms.holds import cancel_book_holds
 from lms.models import (
     AUTHOR_MAX_LENGTH,
     CATEGORY_MAX_LENGTH,
@@ -22,6 +24,7 @@ from lms.models import (
 )
 from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 from lms.permissions import Capability
+from lms.search import SearchQuery, contains_any
 
 DUPLICATE_ISBN = "CATALOG_DUPLICATE_ISBN"
 BOOK_NOT_FOUND = "CATALOG_BOOK_NOT_FOUND"
@@ -30,7 +33,11 @@ TOO_FEW_COPIES = "CATALOG_TOO_FEW_COPIES"
 
 
 class BookRead(BaseModel):
-    """A catalog entry with its current availability."""
+    """A catalog entry with its current availability.
+
+    ``available_copies`` are on the shelf; ``on_hold`` members are queued for
+    them, and the first ``on_hold`` shelf copies are reserved for that queue.
+    """
 
     id: int
     title: str
@@ -40,6 +47,7 @@ class BookRead(BaseModel):
     total_copies: int
     available_copies: int
     is_available: bool
+    on_hold: int
 
 
 class BookPage(BaseModel):
@@ -74,7 +82,7 @@ def available_copies(book: Book, active_loans: int) -> int:
     return max(book.total_copies - active_loans, 0)
 
 
-def to_book_read(book: Book, active_loans: int) -> BookRead:
+def to_book_read(book: Book, active_loans: int, active_holds: int) -> BookRead:
     """Convert a stored book into its public shape."""
     available = available_copies(book, active_loans)
     return BookRead(
@@ -86,18 +94,25 @@ def to_book_read(book: Book, active_loans: int) -> BookRead:
         total_copies=book.total_copies,
         available_copies=available,
         is_available=available > 0,
+        on_hold=active_holds,
     )
 
 
-async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookPage:
-    """One page of books ordered by title, plus the total count.
+async def list_books(session: AsyncSession, *, query: str, limit: int, offset: int) -> BookPage:
+    """One page of books ordered by title, plus the total count of matches.
+
+    A non-empty ``query`` keeps only books whose title, author, ISBN or
+    category contains it, ignoring case.
 
     Example::
 
-        page = await list_books(session, limit=50, offset=0)
+        page = await list_books(session, query="austen", limit=50, offset=0)
     """
-    is_active = Book.retired_at.is_(None)
-    total = await session.scalar(select(func.count()).select_from(Book).where(is_active))
+    conditions = (
+        Book.retired_at.is_(None),
+        contains_any(query, Book.title, Book.author, Book.isbn, Book.category),
+    )
+    total = await session.scalar(select(func.count()).select_from(Book).where(*conditions))
     active = (
         select(Loan.book_id, func.count().label("count"))
         .where(Loan.returned_at.is_(None))
@@ -105,21 +120,21 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
         .subquery()
     )
     rows = await session.execute(
-        select(Book, func.coalesce(active.c.count, 0))
+        select(Book, func.coalesce(active.c.count, 0), active_hold_count(Book.id))
         .outerjoin(active, active.c.book_id == Book.id)
-        .where(is_active)
+        .where(*conditions)
         .order_by(Book.title, Book.id)
         .limit(limit)
         .offset(offset)
     )
     return BookPage(
-        items=[to_book_read(book, active_loans) for book, active_loans in rows],
+        items=[to_book_read(book, loans, holds) for book, loans, holds in rows],
         total=total or 0,
     )
 
 
 def catalog_router(database: Database, auth: Auth) -> APIRouter:
-    """Router for browsing and creating catalog entries.
+    """Router for browsing, searching and managing catalog entries.
 
     Example::
 
@@ -131,10 +146,11 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
     @router.get("", response_model=BookPage)
     async def browse(
         session: Annotated[AsyncSession, Depends(database.session)],
+        q: SearchQuery = "",
         limit: Limit = PAGE_SIZE_DEFAULT,
         offset: Offset = 0,
     ) -> BookPage:
-        return await list_books(session, limit=limit, offset=offset)
+        return await list_books(session, query=q.strip(), limit=limit, offset=offset)
 
     @router.post("", response_model=BookRead, status_code=status.HTTP_201_CREATED)
     async def create(
@@ -153,7 +169,7 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
                 detail=DUPLICATE_ISBN,
             ) from error
         await session.refresh(book)
-        return to_book_read(book, active_loans=0)
+        return to_book_read(book, active_loans=0, active_holds=0)
 
     @router.patch("/{book_id}", response_model=BookRead)
     async def edit(
@@ -197,7 +213,8 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
             .select_from(Loan)
             .where(Loan.book_id == book_id, Loan.returned_at.is_(None))
         )
-        return to_book_read(book, current_loans or 0)
+        current_holds = await session.scalar(select(active_hold_count(book_id)))
+        return to_book_read(book, current_loans or 0, current_holds or 0)
 
     @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def retire(
@@ -205,6 +222,7 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
         session: Annotated[AsyncSession, Depends(database.session)],
         _: Annotated[User, Depends(manage_catalog)],
     ) -> Response:
+        now = now_utc()
         has_active_loan = exists().where(
             Loan.book_id == book_id,
             Loan.returned_at.is_(None),
@@ -216,9 +234,12 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
                 Book.retired_at.is_(None),
                 ~has_active_loan,
             )
-            .values(retired_at=now_utc())
+            .values(retired_at=now)
             .execution_options(synchronize_session=False)
         )
+        if result.rowcount == 1:
+            # A retired book can never be borrowed, so nobody should wait for it.
+            await session.execute(cancel_book_holds(book_id, now))
         await session.commit()
         if result.rowcount == 1:
             return Response(status_code=status.HTTP_204_NO_CONTENT)

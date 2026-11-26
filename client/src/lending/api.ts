@@ -56,6 +56,8 @@ export type Reminder = 'overdue' | 'due_soon';
 /** A loan as its borrower sees it. */
 export interface MemberLoan extends Loan {
   reminder: Reminder | null;
+  /** Accrued overdue fine; frozen once the loan is returned. */
+  fine_cents: number;
 }
 
 export interface MemberLoanPage {
@@ -71,6 +73,17 @@ export async function fetchMyLoans(status: LoanStatus, offset: number): Promise<
     offset: String(offset),
   });
   return getJson<MemberLoanPage>(`/api/loans/mine?${query}`);
+}
+
+/** A member's accrued fines and the daily rate, both in cents. */
+export interface FineSummary {
+  total_cents: number;
+  per_day_cents: number;
+}
+
+/** The signed-in member's fines across all their loans. */
+export async function fetchMyFines(): Promise<FineSummary> {
+  return getJson<FineSummary>('/api/loans/mine/fines');
 }
 
 /** The signed-in member's overdue and due-soon loans, soonest due first. */

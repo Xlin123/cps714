@@ -205,6 +205,10 @@
   color: var(--warning);
 }
 
+.catalog .ready {
+  color: var(--success);
+}
+
 /* Count of loans needing attention, beside "My loans" in the nav bar. */
 .nav-badge {
   display: inline-block;
@@ -253,6 +257,10 @@
 
 .notice.overdue {
   border-left-color: var(--danger);
+}
+
+.notice.ready {
+  border-left-color: var(--success);
 }
 
 .page .notice button {

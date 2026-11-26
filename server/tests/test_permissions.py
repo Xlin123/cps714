@@ -25,6 +25,10 @@ EXPECTED = {
     (Role.MEMBER, Capability.VIEW_MEMBERS): False,
     (Role.LIBRARIAN, Capability.VIEW_MEMBERS): True,
     (Role.ADMIN, Capability.VIEW_MEMBERS): True,
+    # §3 has no row for holds (LMS-16); only members borrow, so only they queue.
+    (Role.MEMBER, Capability.PLACE_HOLDS): True,
+    (Role.LIBRARIAN, Capability.PLACE_HOLDS): False,
+    (Role.ADMIN, Capability.PLACE_HOLDS): False,
 }
 # One request guarded by each capability, to check enforcement per role.
 GUARDED_REQUEST_FOR = {
@@ -32,6 +36,7 @@ GUARDED_REQUEST_FOR = {
     Capability.MANAGE_STAFF: ("GET", "/api/staff", None),
     Capability.VIEW_OWN_LOANS: ("GET", "/api/loans/mine", None),
     Capability.VIEW_MEMBERS: ("GET", "/api/members", None),
+    Capability.PLACE_HOLDS: ("GET", "/api/holds/mine", None),
     Capability.MANAGE_CATALOG: (
         "POST",
         "/api/books",

@@ -13,8 +13,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
+from lms.availability import active_loan_count
 from lms.database import Database
 from lms.fines import FineSummary, borrower_fines_cents, fine_cents
+from lms.holds import fulfil_hold, holds_ahead
 from lms.models import Book, Loan, User
 from lms.paging import PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, Limit, Offset
 from lms.permissions import Capability
@@ -30,6 +32,7 @@ class LoanRefusal(StrEnum):
     ALREADY_BORROWED = "LOAN_ALREADY_BORROWED"
     LOAN_NOT_FOUND = "LOAN_NOT_FOUND"
     ALREADY_RETURNED = "LOAN_ALREADY_RETURNED"
+    RESERVED_FOR_HOLD = "LOAN_RESERVED_FOR_HOLD"
 
 
 _REFUSAL_STATUS = {
@@ -39,6 +42,7 @@ _REFUSAL_STATUS = {
     LoanRefusal.ALREADY_BORROWED: status.HTTP_409_CONFLICT,
     LoanRefusal.LOAN_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     LoanRefusal.ALREADY_RETURNED: status.HTTP_409_CONFLICT,
+    LoanRefusal.RESERVED_FOR_HOLD: status.HTTP_409_CONFLICT,
 }
 
 
@@ -141,15 +145,6 @@ async def find_borrower(session: AsyncSession, email: str) -> User | None:
     return user
 
 
-def _active_loan_count(book_id: object) -> object:
-    return (
-        select(func.count())
-        .select_from(Loan)
-        .where(Loan.book_id == book_id, Loan.returned_at.is_(None))
-        .scalar_subquery()
-    )
-
-
 async def _has_active_loan(session: AsyncSession, book_id: int, borrower_id: uuid.UUID) -> bool:
     found = await session.scalar(
         select(Loan.id).where(
@@ -172,8 +167,10 @@ async def check_out(
 ) -> int:
     """Lend one copy of ``book_id`` to ``borrower`` and return the new loan's id.
 
-    Raises ``LoanRefused`` if the book is missing, the borrower already holds
-    it, or every copy is out.
+    Raises ``LoanRefused`` if the book is missing, the borrower already has
+    it, every copy is out, or the free copies are reserved for members ahead
+    of the borrower in the holds queue. A loan fulfils the borrower's own hold
+    on the book, if any.
 
     Example::
 
@@ -187,9 +184,9 @@ async def check_out(
     borrower_id = borrower.id
     librarian_id = librarian.id
     timestamp = TIMESTAMPAware(timezone=True)
-    # One INSERT … SELECT that only inserts while a copy is free, so two
-    # librarians racing for the last copy cannot both succeed: SQLite runs the
-    # count and the insert under one write lock.
+    # One INSERT … SELECT that only inserts while a copy is free for this
+    # borrower, so two librarians racing for the last copy cannot both
+    # succeed: SQLite runs the counts and the insert under one write lock.
     candidate = select(
         Book.id,
         literal(borrower_id, GUID),
@@ -199,7 +196,7 @@ async def check_out(
     ).where(
         Book.id == book_id,
         Book.retired_at.is_(None),
-        _active_loan_count(Book.id) < Book.total_copies,
+        active_loan_count(Book.id) + holds_ahead(book_id, borrower_id) < Book.total_copies,
     )
     statement = (
         insert(Loan)
@@ -217,6 +214,8 @@ async def check_out(
     )
     try:
         loan_id = (await session.execute(statement)).scalar_one_or_none()
+        if loan_id is not None:
+            await session.execute(fulfil_hold(book_id, borrower_id, now))
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -232,6 +231,9 @@ async def check_out(
     book = await session.get(Book, book_id)
     if book is None or book.retired_at is not None:
         raise LoanRefused(LoanRefusal.BOOK_NOT_FOUND)
+    on_loan = await session.scalar(select(active_loan_count(book_id)))
+    if (on_loan or 0) < book.total_copies:
+        raise LoanRefused(LoanRefusal.RESERVED_FOR_HOLD)
     raise LoanRefused(LoanRefusal.NO_COPIES_AVAILABLE)
 
 

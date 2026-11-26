@@ -7,8 +7,11 @@ export interface Book {
   isbn: string;
   category: string;
   total_copies: number;
+  /** Copies on the shelf, including any reserved for members with holds. */
   available_copies: number;
   is_available: boolean;
+  /** Members queued for this book. */
+  on_hold: number;
 }
 
 export interface BookPage {

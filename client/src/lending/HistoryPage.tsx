@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MyHolds } from '../holds/MyHolds';
 import { useLoad } from '../hooks/useLoad';
 import { fetchMyFines, fetchMyLoans } from './api';
 import type { LoanStatus } from './api';
@@ -49,6 +50,7 @@ export function HistoryPage() {
         ) : (
           <LoanTable page={state.data} offset={offset} onPage={setOffset} />
         ))}
+      <MyHolds />
     </div>
   );
 }

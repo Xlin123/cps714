@@ -40,6 +40,7 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 | `manage_catalog` | librarian, admin | `/staff` (Add a book), `/api/books`     |
 | `view_own_loans` | member           | `/history` (My loans), `/api/loans/mine` |
 | `view_members`   | librarian, admin | `/members` (Members), `/api/members`    |
+| `place_holds`    | member           | `/` (Place hold), `/history` (Holds), `/api/holds` |
 
 ## Catalog
 
@@ -72,9 +73,21 @@ Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 | GET    | `/api/loans/mine/reminders` | -                                 | the member's overdue and due-soon loans (`LMS_DUE_SOON_DAYS`), soonest due first |
 | GET    | `/api/loans/mine/fines`    | -                                  | `{total_cents, per_day_cents}`: the member's fines across all loans |
 
-The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED`, `LOAN_RESERVED_FOR_HOLD` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
 
 Every loan in `/api/loans/mine` and `/api/members/{id}/loans` carries `fine_cents`: each started day past its due date adds `LMS_FINE_PER_DAY_CENTS` (default 25; 0 turns fines off). A returned loan's fine stops at its return. Fines are shown, not collected. See `docs/borrowing/decisions.md`.
+
+## Holds
+
+Requires `place_holds` (member). A member can hold a book when no copy is free for them; the catalogue shows a Place hold button and each book's `on_hold` count. Holds queue in the order placed. When a copy comes back it is reserved for the first member in line: their hold shows "Ready for pickup" under Holds on My loans, and checkout to anyone else is refused with `LOAN_RESERVED_FOR_HOLD` until they borrow it or cancel. Borrowing fulfils the hold; removing a book cancels its holds.
+
+| Method | Path               | Body              | Result |
+|--------|--------------------|-------------------|--------|
+| POST   | `/api/holds`       | JSON `{book_id}`  | 201 with the hold's `position` and `is_ready` |
+| GET    | `/api/holds/mine`  | -                 | the member's active holds, oldest first |
+| DELETE | `/api/holds/{id}`  | -                 | 204; cancels one of the member's own holds |
+
+Refusals: `HOLD_BOOK_NOT_FOUND` and `HOLD_NOT_FOUND` (404); `HOLD_BOOK_AVAILABLE`, `HOLD_ALREADY_BORROWED` and `HOLD_ALREADY_PLACED` (409). See `docs/holds/decisions.md`.
 
 ## Members
 

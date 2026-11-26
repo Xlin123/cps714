@@ -30,6 +30,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   LOAN_ALREADY_BORROWED: 'That member already has this book on loan.',
   LOAN_NOT_FOUND: 'That loan no longer exists.',
   LOAN_ALREADY_RETURNED: 'That loan has already been checked in.',
+  LOAN_RESERVED_FOR_HOLD:
+    'The free copies are reserved for members with holds. Lend to the first member in line.',
+  HOLD_BOOK_NOT_FOUND: 'That book is no longer in the catalogue.',
+  HOLD_BOOK_AVAILABLE: 'A copy is free now, so there is no need to hold it. Ask at the desk.',
+  HOLD_ALREADY_BORROWED: 'You already have this book on loan.',
+  HOLD_ALREADY_PLACED: 'You already have a hold on this book.',
+  HOLD_NOT_FOUND: 'That hold has already ended.',
   MEMBER_NOT_FOUND: 'That member account no longer exists.',
   STAFF_NOT_FOUND: 'That librarian account no longer exists.',
   CATALOG_DUPLICATE_ISBN: 'A book with this ISBN already exists.',
@@ -48,6 +55,7 @@ const ERROR_FIELDS: Record<string, string> = {
   LOAN_BORROWER_NOT_FOUND: 'borrower_email',
   LOAN_NO_COPIES_AVAILABLE: 'book_id',
   LOAN_ALREADY_BORROWED: 'book_id',
+  LOAN_RESERVED_FOR_HOLD: 'book_id',
   CATALOG_DUPLICATE_ISBN: 'isbn',
   CATALOG_TOO_FEW_COPIES: 'total_copies',
 };

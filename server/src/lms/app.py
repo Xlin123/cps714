@@ -16,6 +16,7 @@ from lms.auth import Auth
 from lms.catalog import catalog_router
 from lms.database import Database
 from lms.demo import demo_router, seed_demo_accounts, seed_demo_books
+from lms.holds import holds_router
 from lms.loans import loans_router
 from lms.members import members_router
 from lms.models import User
@@ -107,6 +108,7 @@ def create_app(
         ),
         members_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
         staff_router(database, auth),
+        holds_router(database, auth),
     ):
         app.include_router(feature_router)
     if is_demo_data_enabled:

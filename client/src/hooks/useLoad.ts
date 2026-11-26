@@ -9,7 +9,7 @@ export type LoadState<T> =
  * after unmount or after a newer load started. The last loaded data stays shown
  * while a newer load is in flight. `reload` runs it again with the same deps.
  *
- *     const { state, reload } = useLoad(() => fetchBooks(offset), [offset]);
+ *     const { state, reload } = useLoad(() => fetchBooks(query, offset), [query, offset]);
  */
 export function useLoad<T>(load: () => Promise<T>, deps: DependencyList) {
   const [state, setState] = useState<LoadState<T>>({ status: 'loading' });

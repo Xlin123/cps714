@@ -4,10 +4,10 @@ import uuid
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_users_db_sqlalchemy.generics import now_utc
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
@@ -17,9 +17,9 @@ from lms.models import Loan, User
 from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 from lms.permissions import Capability
 from lms.roles import Role
+from lms.search import SearchQuery, contains_any
 
 MEMBER_NOT_FOUND = "MEMBER_NOT_FOUND"
-QUERY_MAX_LENGTH = 100
 
 
 class MemberRead(BaseModel):
@@ -49,10 +49,6 @@ def _to_member_read(user: User) -> MemberRead:
     return MemberRead(id=user.id, email=user.email, name=user.name, is_active=user.is_active)
 
 
-def _escape_like(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
 async def search_members(
     session: AsyncSession, *, query: str, limit: int, offset: int
 ) -> MemberPage:
@@ -66,15 +62,7 @@ async def search_members(
 
         page = await search_members(session, query="ada", limit=50, offset=0)
     """
-    conditions = [User.role == Role.MEMBER]
-    if query:
-        pattern = f"%{_escape_like(query.lower())}%"
-        conditions.append(
-            or_(
-                func.lower(User.name).like(pattern, escape="\\"),
-                func.lower(User.email).like(pattern, escape="\\"),
-            )
-        )
+    conditions = [User.role == Role.MEMBER, contains_any(query, User.name, User.email)]
     total = await session.scalar(select(func.count()).select_from(User).where(*conditions))
     users = await session.scalars(
         select(User).where(*conditions).order_by(User.name, User.email).limit(limit).offset(offset)
@@ -131,7 +119,7 @@ def members_router(database: Database, auth: Auth, *, due_soon: timedelta) -> AP
     async def members(
         _: Annotated[User, Depends(view)],
         session: Annotated[AsyncSession, Depends(database.session)],
-        q: Annotated[str, Query(max_length=QUERY_MAX_LENGTH)] = "",
+        q: SearchQuery = "",
         limit: Limit = PAGE_SIZE_DEFAULT,
         offset: Offset = 0,
     ) -> MemberPage:

@@ -1,10 +1,11 @@
 import { Fragment, useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { useLoad } from '../hooks/useLoad';
 import { BookEditForm } from './BookEditForm';
 import { EditBookButton } from './EditBookButton';
-import { fetchBooks, PAGE_SIZE } from './api';
+import { fetchBooks, PAGE_SIZE, SEARCH_MAX_LENGTH } from './api';
 import type { Book } from './api';
 
 function availability(book: Book): string {
@@ -14,9 +15,18 @@ function availability(book: Book): string {
 
 export function CatalogPage() {
   const { user } = useAuth();
+  const [draft, setDraft] = useState('');
+  const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
-  const { state, reload } = useLoad(() => fetchBooks(offset), [offset]);
+  const { state, reload } = useLoad(() => fetchBooks(query, offset), [query, offset]);
+
+  function onSearch(event: FormEvent) {
+    event.preventDefault();
+    setQuery(draft.trim());
+    setOffset(0);
+    setEditingBook(null);
+  }
 
   if (state.status === 'failed') {
     return <div className="page error">Could not load the catalogue: {state.error}</div>;
@@ -38,8 +48,19 @@ export function CatalogPage() {
           </Link>
         )}
       </div>
+      <form className="search-form" role="search" onSubmit={onSearch}>
+        <label htmlFor="catalog-query">Title, author or keyword</label>
+        <input
+          id="catalog-query"
+          type="search"
+          maxLength={SEARCH_MAX_LENGTH}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit">Search</button>
+      </form>
       {page.total === 0 ? (
-        <p>No books in the catalogue yet.</p>
+        <p>{query ? `No books match “${query}”.` : 'No books in the catalogue yet.'}</p>
       ) : (
         <>
           <div className="table-scroll">

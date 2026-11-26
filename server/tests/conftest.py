@@ -92,11 +92,18 @@ def add_books(settings: Settings, books: list[Book]) -> None:
     asyncio.run(run())
 
 
-def book(title: str, *, copies: int = 1, isbn: str | None = None) -> Book:
+def book(
+    title: str,
+    *,
+    copies: int = 1,
+    isbn: str | None = None,
+    author: str = "Author",
+    category: str = "Fiction",
+) -> Book:
     return Book(
         title=title,
-        author="Author",
+        author=author,
         isbn=isbn or f"isbn-{title}",
-        category="Fiction",
+        category=category,
         total_copies=copies,
     )

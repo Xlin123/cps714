@@ -22,6 +22,7 @@ from lms.models import (
 )
 from lms.paging import PAGE_SIZE_DEFAULT, Limit, Offset
 from lms.permissions import Capability
+from lms.search import SearchQuery, contains_any
 
 DUPLICATE_ISBN = "CATALOG_DUPLICATE_ISBN"
 BOOK_NOT_FOUND = "CATALOG_BOOK_NOT_FOUND"
@@ -89,15 +90,21 @@ def to_book_read(book: Book, active_loans: int) -> BookRead:
     )
 
 
-async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookPage:
-    """One page of books ordered by title, plus the total count.
+async def list_books(session: AsyncSession, *, query: str, limit: int, offset: int) -> BookPage:
+    """One page of books ordered by title, plus the total count of matches.
+
+    A non-empty ``query`` keeps only books whose title, author, ISBN or
+    category contains it, ignoring case.
 
     Example::
 
-        page = await list_books(session, limit=50, offset=0)
+        page = await list_books(session, query="austen", limit=50, offset=0)
     """
-    is_active = Book.retired_at.is_(None)
-    total = await session.scalar(select(func.count()).select_from(Book).where(is_active))
+    conditions = (
+        Book.retired_at.is_(None),
+        contains_any(query, Book.title, Book.author, Book.isbn, Book.category),
+    )
+    total = await session.scalar(select(func.count()).select_from(Book).where(*conditions))
     active = (
         select(Loan.book_id, func.count().label("count"))
         .where(Loan.returned_at.is_(None))
@@ -107,7 +114,7 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
     rows = await session.execute(
         select(Book, func.coalesce(active.c.count, 0))
         .outerjoin(active, active.c.book_id == Book.id)
-        .where(is_active)
+        .where(*conditions)
         .order_by(Book.title, Book.id)
         .limit(limit)
         .offset(offset)
@@ -119,7 +126,7 @@ async def list_books(session: AsyncSession, *, limit: int, offset: int) -> BookP
 
 
 def catalog_router(database: Database, auth: Auth) -> APIRouter:
-    """Router for browsing and creating catalog entries.
+    """Router for browsing, searching and managing catalog entries.
 
     Example::
 
@@ -131,10 +138,11 @@ def catalog_router(database: Database, auth: Auth) -> APIRouter:
     @router.get("", response_model=BookPage)
     async def browse(
         session: Annotated[AsyncSession, Depends(database.session)],
+        q: SearchQuery = "",
         limit: Limit = PAGE_SIZE_DEFAULT,
         offset: Offset = 0,
     ) -> BookPage:
-        return await list_books(session, limit=limit, offset=offset)
+        return await list_books(session, query=q.strip(), limit=limit, offset=offset)
 
     @router.post("", response_model=BookRead, status_code=status.HTTP_201_CREATED)
     async def create(

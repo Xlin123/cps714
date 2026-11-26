@@ -43,7 +43,7 @@ Signed-out callers get 401; signed-in callers whose role lacks the capability ge
 
 ## Catalog
 
-`GET /api/books?limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1-100. The catalog page at `/` pages through it.
+`GET /api/books?q=&limit=50&offset=0` is public. It returns `{"items": [...], "total": n}`, ordered by title, with each book's `available_copies` (total copies minus active loans) and `is_available`. `limit` is 1-100. `q` (at most 100 characters) keeps only books whose title, author, ISBN or category contains it, ignoring case; `total` then counts the matches. The catalog page at `/` has a search bar and pages through the results.
 
 Every list endpoint pages the same way (`server/src/lms/paging.py`).
 

@@ -56,3 +56,26 @@ conditional statement, so a checkout racing an edit cannot leave total copies
 below the active-loan count. Duplicate ISBNs retain the same refusal code as
 book creation. Available copies are always derived from active loans and are
 never edited directly.
+
+## 2026-11-25: Searching the catalog (LMS-4; #5, #32–#34)
+
+**Context.** #5 was closed in Sprint 2, but no search was built: the ticket
+plan named `GET /api/books/search`, and its sub-tasks stayed open.
+
+**Options.**
+
+| Option | Notes |
+|---|---|
+| `q` on `GET /api/books` | Same paging and `total` as browsing; matches `GET /api/members?q=`. |
+| Separate `GET /api/books/search` | What the ticket named; duplicates the listing query and paging. |
+| SQLite FTS5 index | Ranked, word-aware matching; needs a virtual table kept in sync with `book`. |
+
+**Decision.** `q` on `GET /api/books`. A book matches when its title, author,
+ISBN or category contains `q`, ignoring case; that covers "title, author or
+keyword". The match lives in `lms/search.py` (`contains_any`), now shared with
+member search, so `%` and `_` match literally in both and both cap `q` at 100
+characters. A blank `q` lists the whole catalog.
+
+**Consequences.** Search is a `LIKE '%q%'` scan, fine for the demo-sized
+catalog in the non-functional requirements (hundreds to low thousands of
+books). FTS5 would be the next step for a larger collection.

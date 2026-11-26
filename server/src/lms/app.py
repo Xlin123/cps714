@@ -64,6 +64,7 @@ def create_app(
     is_demo_data_enabled: bool,
     loan_period: timedelta,
     due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> FastAPI:
     """Build the app. The app takes ownership of ``database`` and disposes it on shutdown.
 
@@ -77,6 +78,7 @@ def create_app(
             is_demo_data_enabled=settings.is_demo_data_enabled,
             loan_period=timedelta(days=settings.loan_period_days),
             due_soon=timedelta(days=settings.due_soon_days),
+            fine_per_day_cents=settings.fine_per_day_cents,
         )
     """
 
@@ -96,8 +98,14 @@ def create_app(
     # Each feature router takes only what it needs; add new features here.
     for feature_router in (
         catalog_router(database, auth),
-        loans_router(database, auth, loan_period=loan_period, due_soon=due_soon),
-        members_router(database, auth, due_soon=due_soon),
+        loans_router(
+            database,
+            auth,
+            loan_period=loan_period,
+            due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
+        ),
+        members_router(database, auth, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents),
         staff_router(database, auth),
     ):
         app.include_router(feature_router)
@@ -124,4 +132,5 @@ def app_from_env() -> FastAPI:
         is_demo_data_enabled=settings.is_demo_data_enabled,
         loan_period=timedelta(days=settings.loan_period_days),
         due_soon=timedelta(days=settings.due_soon_days),
+        fine_per_day_cents=settings.fine_per_day_cents,
     )

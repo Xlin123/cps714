@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useLoad } from '../hooks/useLoad';
 import type { LoanStatus } from '../lending/api';
 import { LoanStatusFilter, LoanTable } from '../lending/LoanTable';
+import { formatCents } from '../lending/money';
 import { fetchMember, fetchMemberLoans } from './api';
 
 const EMPTY_TEXT: Record<LoanStatus, string> = {
@@ -45,6 +46,8 @@ export function MemberProfilePage() {
             <dd>{profile.data.active_loans}</dd>
             <dt>Loans ever</dt>
             <dd>{profile.data.total_loans}</dd>
+            <dt>Fines</dt>
+            <dd>{formatCents(profile.data.fines_cents)}</dd>
           </dl>
           <h2>Loans</h2>
           <LoanStatusFilter status={status} onChange={chooseStatus} />

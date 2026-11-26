@@ -9,6 +9,7 @@ DEFAULT_DB_URL = "sqlite+aiosqlite:///./lms.sqlite3"
 DEFAULT_SESSION_LIFETIME_SECONDS = 60 * 60 * 24
 DEFAULT_LOAN_PERIOD_DAYS = 14
 DEFAULT_DUE_SOON_DAYS = 3
+DEFAULT_FINE_PER_DAY_CENTS = 25
 
 
 class SettingsError(ValueError):
@@ -36,6 +37,8 @@ class Settings:
     loan_period_days: int = DEFAULT_LOAN_PERIOD_DAYS
     # How close to its due date a loan starts showing a "due soon" reminder.
     due_soon_days: int = DEFAULT_DUE_SOON_DAYS
+    # What each started day overdue adds to a loan's fine; 0 turns fines off.
+    fine_per_day_cents: int = DEFAULT_FINE_PER_DAY_CENTS
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -59,6 +62,9 @@ class Settings:
                 source, "LMS_LOAN_PERIOD_DAYS", DEFAULT_LOAN_PERIOD_DAYS
             ),
             due_soon_days=_parse_positive_int(source, "LMS_DUE_SOON_DAYS", DEFAULT_DUE_SOON_DAYS),
+            fine_per_day_cents=_parse_non_negative_int(
+                source, "LMS_FINE_PER_DAY_CENTS", DEFAULT_FINE_PER_DAY_CENTS
+            ),
         )
 
 
@@ -73,14 +79,25 @@ def _parse_bool(source: Mapping[str, str], key: str, default: bool) -> bool:
     raise SettingsError(f"{key} must be 'true' or 'false', got {raw!r}")
 
 
-def _parse_positive_int(source: Mapping[str, str], key: str, default: int) -> int:
+def _parse_int(source: Mapping[str, str], key: str, default: int) -> int:
     raw = source.get(key)
     if raw is None:
         return default
     try:
-        value = int(raw)
+        return int(raw)
     except ValueError as error:
         raise SettingsError(f"{key} must be an integer, got {raw!r}") from error
+
+
+def _parse_positive_int(source: Mapping[str, str], key: str, default: int) -> int:
+    value = _parse_int(source, key, default)
     if value <= 0:
         raise SettingsError(f"{key} must be positive, got {value}")
+    return value
+
+
+def _parse_non_negative_int(source: Mapping[str, str], key: str, default: int) -> int:
+    value = _parse_int(source, key, default)
+    if value < 0:
+        raise SettingsError(f"{key} must not be negative, got {value}")
     return value

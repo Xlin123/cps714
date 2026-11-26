@@ -18,6 +18,8 @@ export interface MemberPage {
 export interface MemberProfile extends Member {
   active_loans: number;
   total_loans: number;
+  /** Fines accrued across all the member's loans. */
+  fines_cents: number;
 }
 
 /** Page size for member search; the server rejects anything above 100. */

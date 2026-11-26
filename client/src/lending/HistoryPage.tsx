@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useLoad } from '../hooks/useLoad';
-import { fetchMyLoans } from './api';
+import { fetchMyFines, fetchMyLoans } from './api';
 import type { LoanStatus } from './api';
 import { LoanStatusFilter, LoanTable } from './LoanTable';
+import { formatCents } from './money';
 import { ReminderNotices } from './ReminderNotices';
 
 const EMPTY_TEXT: Record<LoanStatus, string> = {
@@ -16,6 +17,7 @@ export function HistoryPage() {
   const [status, setStatus] = useState<LoanStatus>('all');
   const [offset, setOffset] = useState(0);
   const { state } = useLoad(() => fetchMyLoans(status, offset), [status, offset]);
+  const fines = useLoad(fetchMyFines, []).state;
 
   const chooseStatus = (next: LoanStatus) => {
     setStatus(next);
@@ -26,6 +28,16 @@ export function HistoryPage() {
     <div className="page wide">
       <h1>My loans</h1>
       <ReminderNotices />
+      {fines.status === 'loaded' && (
+        <p>
+          {fines.data.total_cents > 0
+            ? `Fines owed: ${formatCents(fines.data.total_cents)}, at ${formatCents(fines.data.per_day_cents)} per day overdue.`
+            : 'You have no overdue fines.'}
+        </p>
+      )}
+      {fines.status === 'failed' && (
+        <p className="error">Could not load your fines: {fines.error}</p>
+      )}
       <LoanStatusFilter status={status} onChange={chooseStatus} />
       {state.status === 'loading' && <p>Loading…</p>}
       {state.status === 'failed' && (

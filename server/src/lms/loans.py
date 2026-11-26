@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from lms.auth import Auth
 from lms.database import Database
+from lms.fines import FineSummary, borrower_fines_cents, fine_cents
 from lms.models import Book, Loan, User
 from lms.paging import PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, Limit, Offset
 from lms.permissions import Capability
@@ -116,9 +117,10 @@ class LoanPage(BaseModel):
 
 
 class MemberLoanRead(LoanRead):
-    """A loan as its borrower sees it, with any reminder it warrants."""
+    """A loan as its borrower sees it, with any reminder and fine it warrants."""
 
     reminder: Reminder | None
+    fine_cents: int
 
 
 class MemberLoanPage(BaseModel):
@@ -313,12 +315,19 @@ def _to_member_loan_read(
     *,
     now: datetime,
     due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> MemberLoanRead:
     read = _to_loan_read(loan, book_title, borrower_name, borrower_email)
     reminder = reminder_for(
         due_at=read.due_at, returned_at=read.returned_at, now=now, due_soon=due_soon
     )
-    return MemberLoanRead(**read.model_dump(), reminder=reminder)
+    fine = fine_cents(
+        due_at=read.due_at,
+        returned_at=read.returned_at,
+        now=now,
+        per_day_cents=fine_per_day_cents,
+    )
+    return MemberLoanRead(**read.model_dump(), reminder=reminder, fine_cents=fine)
 
 
 async def list_borrower_loans(
@@ -330,6 +339,7 @@ async def list_borrower_loans(
     offset: int,
     now: datetime,
     due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> MemberLoanPage:
     """One page of ``borrower_id``'s loans, most recently checked out first.
 
@@ -339,7 +349,7 @@ async def list_borrower_loans(
 
         page = await list_borrower_loans(
             session, borrower_id=member.id, status=LoanStatus.RETURNED, limit=50, offset=0,
-            now=now_utc(), due_soon=timedelta(days=3),
+            now=now_utc(), due_soon=timedelta(days=3), fine_per_day_cents=25,
         )
     """
     conditions = [Loan.borrower_id == borrower_id]
@@ -355,12 +365,22 @@ async def list_borrower_loans(
         .limit(limit)
         .offset(offset)
     )
-    items = [_to_member_loan_read(*row, now=now, due_soon=due_soon) for row in rows]
+    items = [
+        _to_member_loan_read(
+            *row, now=now, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents
+        )
+        for row in rows
+    ]
     return MemberLoanPage(items=items, total=total or 0)
 
 
 async def list_borrower_reminders(
-    session: AsyncSession, *, borrower_id: uuid.UUID, now: datetime, due_soon: timedelta
+    session: AsyncSession,
+    *,
+    borrower_id: uuid.UUID,
+    now: datetime,
+    due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> MemberLoanPage:
     """``borrower_id``'s active loans that are overdue or due soon, soonest due first.
 
@@ -370,7 +390,8 @@ async def list_borrower_reminders(
     Example::
 
         reminders = await list_borrower_reminders(
-            session, borrower_id=member.id, now=now_utc(), due_soon=timedelta(days=3)
+            session, borrower_id=member.id, now=now_utc(), due_soon=timedelta(days=3),
+            fine_per_day_cents=25,
         )
     """
     conditions = [
@@ -382,7 +403,12 @@ async def list_borrower_reminders(
     rows = await session.execute(
         _loan_rows().where(*conditions).order_by(Loan.due_at, Loan.id).limit(PAGE_SIZE_MAX)
     )
-    items = [_to_member_loan_read(*row, now=now, due_soon=due_soon) for row in rows]
+    items = [
+        _to_member_loan_read(
+            *row, now=now, due_soon=due_soon, fine_per_day_cents=fine_per_day_cents
+        )
+        for row in rows
+    ]
     return MemberLoanPage(items=items, total=total or 0)
 
 
@@ -391,19 +417,26 @@ def _http_error(refused: LoanRefused) -> HTTPException:
 
 
 def loans_router(
-    database: Database, auth: Auth, *, loan_period: timedelta, due_soon: timedelta
+    database: Database,
+    auth: Auth,
+    *,
+    loan_period: timedelta,
+    due_soon: timedelta,
+    fine_per_day_cents: int,
 ) -> APIRouter:
     """Router for checkout, check-in and loan lists.
 
     Lending routes need ``LEND_BOOKS``; the ``/api/loans/mine`` routes need
     ``VIEW_OWN_LOANS``. ``due_soon`` is how long before its due date a loan
-    starts showing a reminder.
+    starts showing a reminder; ``fine_per_day_cents`` is what each started
+    day overdue adds to its fine.
 
     Example::
 
         app.include_router(
             loans_router(
-                database, auth, loan_period=timedelta(days=14), due_soon=timedelta(days=3)
+                database, auth, loan_period=timedelta(days=14), due_soon=timedelta(days=3),
+                fine_per_day_cents=25,
             )
         )
     """
@@ -462,6 +495,7 @@ def loans_router(
             offset=offset,
             now=now_utc(),
             due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
         )
 
     @router.get("/mine/reminders", response_model=MemberLoanPage)
@@ -470,8 +504,22 @@ def loans_router(
         session: Annotated[AsyncSession, Depends(database.session)],
     ) -> MemberLoanPage:
         return await list_borrower_reminders(
-            session, borrower_id=borrower.id, now=now_utc(), due_soon=due_soon
+            session,
+            borrower_id=borrower.id,
+            now=now_utc(),
+            due_soon=due_soon,
+            fine_per_day_cents=fine_per_day_cents,
         )
+
+    @router.get("/mine/fines", response_model=FineSummary)
+    async def my_fines(
+        borrower: Annotated[User, Depends(view_own)],
+        session: Annotated[AsyncSession, Depends(database.session)],
+    ) -> FineSummary:
+        total = await borrower_fines_cents(
+            session, borrower_id=borrower.id, now=now_utc(), per_day_cents=fine_per_day_cents
+        )
+        return FineSummary(total_cents=total, per_day_cents=fine_per_day_cents)
 
     @router.post("/{loan_id}/return", response_model=LoanRead)
     async def check_in(

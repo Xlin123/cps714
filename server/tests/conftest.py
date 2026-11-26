@@ -18,6 +18,7 @@ from lms.settings import Settings
 PASSWORD = "correct horse battery"
 LOAN_PERIOD = timedelta(days=14)
 DUE_SOON = timedelta(days=3)
+FINE_PER_DAY_CENTS = 25
 
 
 @pytest.fixture
@@ -39,6 +40,7 @@ def auth_and_app(settings: Settings) -> tuple[Auth, FastAPI]:
         is_demo_data_enabled=False,
         loan_period=LOAN_PERIOD,
         due_soon=DUE_SOON,
+        fine_per_day_cents=FINE_PER_DAY_CENTS,
     )
     return auth, app
 

@@ -1,4 +1,5 @@
 import { HISTORY_PAGE_SIZE } from './api';
+import { formatCents } from './money';
 import type { LoanStatus, MemberLoan, MemberLoanPage } from './api';
 
 const STATUS_LABELS: { status: LoanStatus; label: string }[] = [
@@ -63,6 +64,7 @@ export function LoanTable({
               <th scope="col">Borrowed</th>
               <th scope="col">Due</th>
               <th scope="col">Returned</th>
+              <th scope="col">Fine</th>
             </tr>
           </thead>
           <tbody>
@@ -72,6 +74,9 @@ export function LoanTable({
                 <td>{formatDate(loan.checked_out_at)}</td>
                 <td>{formatDate(loan.due_at)}</td>
                 <ReturnedCell loan={loan} />
+                <td className={loan.fine_cents > 0 ? 'overdue' : undefined}>
+                  {loan.fine_cents > 0 ? formatCents(loan.fine_cents) : '—'}
+                </td>
               </tr>
             ))}
           </tbody>

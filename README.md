@@ -70,8 +70,11 @@ Requires `lend_books`. The Lending page (`/staff`) checks books out and back in.
 | POST   | `/api/loans/{id}/return`   | -                                  | 200 with the returned loan |
 | GET    | `/api/loans/mine?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's own loans, newest first, each with `reminder` |
 | GET    | `/api/loans/mine/reminders` | -                                 | the member's overdue and due-soon loans (`LMS_DUE_SOON_DAYS`), soonest due first |
+| GET    | `/api/loans/mine/fines`    | -                                  | `{total_cents, per_day_cents}`: the member's fines across all loans |
 
 The borrower must be an active member. Refusals come back as a code in `detail`: `LOAN_BOOK_NOT_FOUND` and `LOAN_BORROWER_NOT_FOUND` (404); `LOAN_NO_COPIES_AVAILABLE`, `LOAN_ALREADY_BORROWED` and `LOAN_ALREADY_RETURNED` (409); `LOAN_NOT_FOUND` (404). Rules and the race-safety design: `docs/borrowing/decisions.md`.
+
+Every loan in `/api/loans/mine` and `/api/members/{id}/loans` carries `fine_cents`: each started day past its due date adds `LMS_FINE_PER_DAY_CENTS` (default 25; 0 turns fines off). A returned loan's fine stops at its return. Fines are shown, not collected. See `docs/borrowing/decisions.md`.
 
 ## Members
 
@@ -80,7 +83,7 @@ Requires `view_members`. The Members page (`/members`) searches member accounts;
 | Method | Path                                    | Query                         | Result |
 |--------|-----------------------------------------|-------------------------------|--------|
 | GET    | `/api/members?q&limit&offset`           | `q`: name or email fragment, case-insensitive, at most 100 characters; empty lists everyone | member accounts (active and deactivated), by name |
-| GET    | `/api/members/{id}`                     | -                             | the member with `active_loans` and `total_loans` |
+| GET    | `/api/members/{id}`                     | -                             | the member with `active_loans`, `total_loans` and `fines_cents` |
 | GET    | `/api/members/{id}/loans?status&limit&offset` | `status`: `all` (default), `active`, `returned` | the member's loans, same shape as `/api/loans/mine` |
 
 Staff accounts are never returned: an unknown id or a staff id gives `MEMBER_NOT_FOUND` (404). See `docs/members/decisions.md`.

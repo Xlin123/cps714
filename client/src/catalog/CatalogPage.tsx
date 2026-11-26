@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { ActionButton } from '../components/ActionButton';
-import { placeHold } from '../holds/api';
+import { fetchMyHolds, placeHold } from '../holds/api';
 import { useLoad } from '../hooks/useLoad';
 import { BookEditForm } from './BookEditForm';
 import { EditBookButton } from './EditBookButton';
@@ -28,6 +28,14 @@ export function CatalogPage() {
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [heldTitle, setHeldTitle] = useState<string | null>(null);
   const { state, reload } = useLoad(() => fetchBooks(query, offset), [query, offset]);
+  const canPlaceHolds = user?.capabilities.includes('place_holds') ?? false;
+  const myHolds = useLoad(
+    async () => (canPlaceHolds ? (await fetchMyHolds()).items : []),
+    [canPlaceHolds],
+  );
+  const heldBookIds = new Set(
+    myHolds.state.status === 'loaded' ? myHolds.state.data.map((hold) => hold.book_id) : [],
+  );
 
   function onSearch(event: FormEvent) {
     event.preventDefault();
@@ -43,7 +51,6 @@ export function CatalogPage() {
 
   const page = state.data;
   const canManageCatalog = user?.capabilities.includes('manage_catalog') ?? false;
-  const canPlaceHolds = user?.capabilities.includes('place_holds') ?? false;
   const hasActionColumn = canManageCatalog || canPlaceHolds;
   const hasPrevious = offset > 0;
   const hasNext = offset + PAGE_SIZE < page.total;
@@ -115,7 +122,8 @@ export function CatalogPage() {
                       )}
                       {canPlaceHolds && (
                         <td>
-                          {mustQueue(book) && (
+                          {heldBookIds.has(book.id) && <Link to="/history">On hold</Link>}
+                          {!heldBookIds.has(book.id) && mustQueue(book) && (
                             <ActionButton
                               label="Place hold"
                               busyLabel="Placing…"
@@ -124,6 +132,7 @@ export function CatalogPage() {
                                 await placeHold(book.id);
                                 setHeldTitle(book.title);
                                 reload();
+                                myHolds.reload();
                               }}
                             />
                           )}
